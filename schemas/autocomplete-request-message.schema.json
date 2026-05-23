@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/autocomplete-request-message.schema.json",
+  "title": "Frontend Autocomplete Request Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "blockGeneration", "field", "prefix"],
+      "properties": {
+        "type": { "const": "autocomplete.request" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "blockGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "field": { "$ref": "common.schema.json#/$defs/fieldRef" },
+        "prefix": { "type": "string" }
+      }
+    }
+  ]
+}

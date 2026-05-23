@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/block-snapshot-message.schema.json",
+  "title": "Backend Block Snapshot Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "block"],
+      "properties": {
+        "type": { "const": "block.snapshot" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "block": { "$ref": "common.schema.json#/$defs/block" }
+      }
+    }
+  ]
+}

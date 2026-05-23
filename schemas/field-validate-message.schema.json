@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/field-validate-message.schema.json",
+  "title": "Frontend Field Validate Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "blockGeneration", "field", "value"],
+      "properties": {
+        "type": { "const": "field.validate" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "blockGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "field": { "$ref": "common.schema.json#/$defs/fieldRef" },
+        "value": { "$ref": "common.schema.json#/$defs/value" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/backend-message.schema.json",
+  "title": "Formular Backend to Frontend Message",
+  "oneOf": [
+    { "$ref": "menu-snapshot-message.schema.json" },
+    { "$ref": "block-snapshot-message.schema.json" },
+    { "$ref": "block-delete-message.schema.json" },
+    { "$ref": "field-status-message.schema.json" },
+    { "$ref": "autocomplete-hints-message.schema.json" }
+  ]
+}

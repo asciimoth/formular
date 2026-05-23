@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/frontend-message.schema.json",
+  "title": "Formular Frontend to Backend Message",
+  "oneOf": [
+    { "$ref": "field-update-message.schema.json" },
+    { "$ref": "field-validate-message.schema.json" },
+    { "$ref": "form-apply-message.schema.json" },
+    { "$ref": "button-press-message.schema.json" },
+    { "$ref": "autocomplete-request-message.schema.json" }
+  ]
+}

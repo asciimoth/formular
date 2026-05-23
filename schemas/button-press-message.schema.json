@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/button-press-message.schema.json",
+  "title": "Frontend Button Press Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "blockGeneration", "buttonId", "blockId"],
+      "properties": {
+        "type": { "const": "button.press" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "blockId": { "$ref": "common.schema.json#/$defs/id" },
+        "blockGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "elementPath": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["arrayFieldId", "elementId"],
+            "properties": {
+              "arrayFieldId": { "$ref": "common.schema.json#/$defs/id" },
+              "elementId": { "$ref": "common.schema.json#/$defs/id" }
+            }
+          }
+        },
+        "buttonId": { "$ref": "common.schema.json#/$defs/id" }
+      }
+    }
+  ]
+}

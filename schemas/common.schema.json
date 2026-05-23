@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/common.schema.json",
+  "title": "Formular Common Types",
+  "type": "object",
+  "$defs": {
+    "menuId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "value": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "integer" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/arrayElementValue" }
+        }
+      ]
+    },
+    "copyable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" }
+      }
+    },
+    "textFormat": {
+      "type": "string",
+      "enum": ["plain", "markdown", "code"]
+    },
+    "validationState": {
+      "type": "string",
+      "enum": ["unset", "ok", "warn", "error"]
+    },
+    "fieldKind": {
+      "type": "string",
+      "enum": ["text", "int", "float", "file", "checkbox", "radio", "range", "array"]
+    },
+    "textSubtype": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fieldRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blockId", "fieldId"],
+      "properties": {
+        "blockId": { "$ref": "#/$defs/id" },
+        "fieldId": { "$ref": "#/$defs/id" },
+        "elementPath": {
+          "description": "Path through array fields to a nested element field. Each segment names the array field and element ID.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["arrayFieldId", "elementId"],
+            "properties": {
+              "arrayFieldId": { "$ref": "#/$defs/id" },
+              "elementId": { "$ref": "#/$defs/id" }
+            }
+          }
+        }
+      }
+    },
+    "fieldValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fieldId", "value"],
+      "properties": {
+        "fieldId": { "$ref": "#/$defs/id" },
+        "value": { "$ref": "#/$defs/value" }
+      }
+    },
+    "arrayElementValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "template", "values"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "template": { "$ref": "#/$defs/id" },
+        "values": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/value" }
+        }
+      }
+    },
+    "button": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "label"],
+      "properties": {
+        "type": { "const": "button" },
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string" },
+        "inactive": { "type": "boolean", "default": false },
+        "help": { "type": "string" }
+      }
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "text"],
+      "properties": {
+        "type": { "const": "header" },
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "type": "string" },
+        "help": { "type": "string" }
+      }
+    },
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "text"],
+      "properties": {
+        "type": { "const": "label" },
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "type": "string" },
+        "format": { "$ref": "#/$defs/textFormat", "default": "plain" },
+        "syntax": { "type": "string" },
+        "help": { "type": "string" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "kind", "label"],
+      "properties": {
+        "type": { "const": "field" },
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "$ref": "#/$defs/fieldKind" },
+        "label": { "type": "string" },
+        "value": { "$ref": "#/$defs/value" },
+        "placeholder": { "type": "string" },
+        "help": { "type": "string" },
+        "readonly": { "type": "boolean", "default": false },
+        "required": { "type": "boolean", "default": false },
+        "validate": { "type": "boolean", "default": false },
+        "status": { "$ref": "#/$defs/validationState", "default": "unset" },
+        "statusText": { "type": "string" },
+        "secret": { "type": "boolean", "default": false },
+        "multiline": { "type": "boolean", "default": false },
+        "subtype": { "$ref": "#/$defs/textSubtype" },
+        "autocomplete": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "tag": { "type": "string" }
+          }
+        },
+        "allowedValues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/value" }
+        },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "fraction": { "type": "integer", "minimum": 0 },
+        "maxBytes": { "type": "integer", "minimum": 1, "default": 4098 },
+        "accept": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "templates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/arrayTemplate" }
+        },
+        "elements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/arrayElement" }
+        }
+      }
+    },
+    "item": {
+      "oneOf": [
+        { "$ref": "#/$defs/header" },
+        { "$ref": "#/$defs/label" },
+        { "$ref": "#/$defs/button" },
+        { "$ref": "#/$defs/field" }
+      ]
+    },
+    "arrayTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "items"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "label": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/label" },
+              { "$ref": "#/$defs/button" },
+              { "$ref": "#/$defs/field" }
+            ]
+          }
+        }
+      }
+    },
+    "arrayElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "template", "items"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "template": { "$ref": "#/$defs/id" },
+        "items": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/label" },
+              { "$ref": "#/$defs/button" },
+              { "$ref": "#/$defs/field" }
+            ]
+          }
+        },
+        "copyable": { "$ref": "#/$defs/copyable" }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "order", "generation", "form", "items"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "order": { "type": "integer" },
+        "generation": { "$ref": "#/$defs/generation" },
+        "form": { "type": "boolean" },
+        "inactive": { "type": "boolean", "default": false },
+        "collapsible": { "type": "boolean", "default": false },
+        "collapsed": { "type": "boolean", "default": false },
+        "copyable": { "$ref": "#/$defs/copyable" },
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/item" }
+        }
+      }
+    },
+    "messageBase": {
+      "type": "object",
+      "required": ["type", "menuId"],
+      "properties": {
+        "type": { "type": "string" },
+        "menuId": { "$ref": "#/$defs/menuId" },
+        "menuGeneration": { "$ref": "#/$defs/generation" },
+        "blockGeneration": { "$ref": "#/$defs/generation" }
+      }
+    }
+  }
+}

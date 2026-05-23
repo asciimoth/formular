@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/form-apply-message.schema.json",
+  "title": "Frontend Form Apply Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "blockId", "blockGeneration", "values"],
+      "properties": {
+        "type": { "const": "form.apply" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "blockId": { "$ref": "common.schema.json#/$defs/id" },
+        "blockGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "values": {
+          "type": "object",
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/value" }
+        }
+      }
+    }
+  ]
+}

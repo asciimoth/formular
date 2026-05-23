@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/field-status-message.schema.json",
+  "title": "Backend Field Status Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "blockGeneration", "field", "status"],
+      "properties": {
+        "type": { "const": "field.status" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "blockGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "field": { "$ref": "common.schema.json#/$defs/fieldRef" },
+        "status": { "$ref": "common.schema.json#/$defs/validationState" },
+        "statusText": { "type": "string" },
+        "readonly": { "type": "boolean" }
+      }
+    }
+  ]
+}
