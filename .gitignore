@@ -35,3 +35,10 @@ go.work.sum
 /.pre-commit-config.yaml
 /.direnv
 
+# JavaScript tooling
+node_modules/
+test-results/
+playwright-report/
+demo/public/formular-demo.wasm
+demo/public/wasm_exec.js
+

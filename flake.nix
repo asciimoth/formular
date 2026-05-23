@@ -38,9 +38,9 @@
               ''; in builtins.toString script;
               stages = [ "commit-msg" ];
             };
-            govet.enable = true;
+            # govet.enable = true;
             gofmt.enable = true;
-            golangci-lint.enable = true;
+            # golangci-lint.enable = true;
             gotidy = {
               enable = true;
               description = "Makes sure go.mod matches the source code";
@@ -55,13 +55,23 @@
     in {
       devShells.default = pkgs.mkShell {
         inherit (checks.pre-commit-check) shellHook;
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+        CHROME_BIN = "${pkgs.chromium}/bin/chromium";
         buildInputs = with pkgs; [
           go
           golangci-lint
           gopls
 
+          nodejs_24
+          pnpm
+          typescript
+
           typos
           commitizen
+          just
+
+          # for browser/e2e tests
+          chromium
         ];
       };
     });

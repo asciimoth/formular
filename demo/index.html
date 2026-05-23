@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FormularMenu WASM demo</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./public/wasm_exec.js"></script>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="demo-header">
+        <div>
+          <h1>FormularMenu WASM demo</h1>
+          <span id="backend-state">Loading Go backend</span>
+        </div>
+        <div class="demo-actions">
+          <button id="restart-frontends" type="button">Restart frontends</button>
+          <button id="restart-backend" type="button">Restart backend</button>
+        </div>
+      </header>
+      <section class="demo-grid" aria-label="Two independent Formular menus">
+        <div>
+          <h2>Left frontend</h2>
+          <div id="left-menu"></div>
+        </div>
+        <div>
+          <h2>Right frontend</h2>
+          <div id="right-menu"></div>
+        </div>
+      </section>
+      <section class="demo-log" aria-label="Merged message channel">
+        <h2>Shared channel</h2>
+        <ol id="message-log"></ol>
+      </section>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
