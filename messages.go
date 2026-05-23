@@ -20,10 +20,12 @@ const (
 
 // Item type constants used by menu and array element content.
 const (
-	ItemHeader = "header"
-	ItemLabel  = "label"
-	ItemButton = "button"
-	ItemField  = "field"
+	ItemHeader      = "header"
+	ItemLabel       = "label"
+	ItemProgressbar = "progressbar"
+	ItemLogs        = "logs"
+	ItemButton      = "button"
+	ItemField       = "field"
 )
 
 // Field kind constants supported by the base DSL.
@@ -43,6 +45,16 @@ const (
 	TextPlain    = "plain"
 	TextMarkdown = "markdown"
 	TextCode     = "code"
+)
+
+// Log level constants for logs item rendering.
+const (
+	LogTrace = "trace"
+	LogDebug = "debug"
+	LogInfo  = "info"
+	LogWarn  = "warn"
+	LogError = "error"
+	LogPanic = "panic"
 )
 
 // Validation status constants set by a backend.
@@ -268,7 +280,7 @@ func (b Block) Copy() Block {
 
 // Item is a discriminated menu content item.
 type Item struct {
-	// Type is one of header, label, button, or field.
+	// Type is one of header, label, progressbar, logs, button, or field.
 	Type string `json:"type"`
 	// ID is unique inside its owning block or array element.
 	ID string `json:"id"`
@@ -282,6 +294,10 @@ type Item struct {
 	Syntax string `json:"syntax,omitempty"`
 	// Help is an optional plaintext hint attached to the item.
 	Help string `json:"help,omitempty"`
+	// Progress is the percentage shown by progressbar items, from 0 to 100.
+	Progress *uint `json:"progress,omitempty"`
+	// Logs contains lines shown by logs items.
+	Logs []LogLine `json:"logs,omitempty"`
 	// Inactive disables a button.
 	Inactive bool `json:"inactive,omitempty"`
 	// Field contains field-specific configuration when Type is field.
@@ -290,8 +306,23 @@ type Item struct {
 
 // Copy returns a deep copy of i.
 func (i Item) Copy() Item {
+	i.Progress = copyPtr(i.Progress)
+	i.Logs = copyLogLines(i.Logs)
 	i.Field = copyFieldPtr(i.Field)
 	return i
+}
+
+// LogLine is one rendered line in a logs item.
+type LogLine struct {
+	// Level controls the colored prefix shown before Text.
+	Level string `json:"level"`
+	// Text is the line body.
+	Text string `json:"text"`
+}
+
+// Copy returns a deep copy of l.
+func (l LogLine) Copy() LogLine {
+	return l
 }
 
 // Field contains input configuration for an Item with type field.
@@ -490,6 +521,15 @@ func copyItems(in []Item) []Item {
 	for i := range in {
 		out[i] = in[i].Copy()
 	}
+	return out
+}
+
+func copyLogLines(in []LogLine) []LogLine {
+	if in == nil {
+		return nil
+	}
+	out := make([]LogLine, len(in))
+	copy(out, in)
 	return out
 }
 

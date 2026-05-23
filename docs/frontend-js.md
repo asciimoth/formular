@@ -58,7 +58,8 @@ new FormularMenu(root, "settings", send, {
 ```
 
 The renderer emits stable classes such as `PREFIX-root`, `PREFIX-block`,
-`PREFIX-field`, `PREFIX-control`, `PREFIX-button`, and `PREFIX-status`.
+`PREFIX-field`, `PREFIX-control`, `PREFIX-progressbar`, `PREFIX-logs`,
+`PREFIX-button`, and `PREFIX-status`.
 
 ## Message behavior
 
@@ -67,6 +68,8 @@ The renderer emits stable classes such as `PREFIX-root`, `PREFIX-block`,
 - `block.delete` removes one block.
 - `field.status` updates validation state, status text, and readonly state.
 - `autocomplete.hints` populates the focused text input datalist.
+- `progressbar` items render readonly progress and do not send frontend messages.
+- `logs` items render readonly log lines with colored level prefixes.
 - Non-form field edits send `field.update`.
 - Fields with `validate: true` send `field.validate`.
 - Form blocks render local Reset and Apply controls; Apply sends `form.apply`.

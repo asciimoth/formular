@@ -508,7 +508,7 @@ func TestE2EMenuFixturesExerciseAllProtocolFeatures(t *testing.T) {
 			t.Fatalf("fixtures did not include %s field", kind)
 		}
 	}
-	for _, item := range []string{formular.ItemHeader, formular.ItemLabel, formular.ItemButton, formular.ItemField} {
+	for _, item := range []string{formular.ItemHeader, formular.ItemLabel, formular.ItemProgressbar, formular.ItemLogs, formular.ItemButton, formular.ItemField} {
 		if !seenItems[item] {
 			t.Fatalf("fixtures did not include %s item", item)
 		}
@@ -812,6 +812,7 @@ func settingsMenu() formular.MenuSnapshotMessage {
 	maxTen := 10.0
 	fraction := uint(2)
 	maxBytes := uint64(2048)
+	progress := uint(35)
 	return formular.MenuSnapshotMessage{
 		MessageBase: formular.MessageBase{Type: formular.MessageMenuSnapshot, MenuID: "settings", MenuGeneration: 1},
 		Blocks: []formular.Block{
@@ -824,6 +825,15 @@ func settingsMenu() formular.MenuSnapshotMessage {
 				Items: []formular.Item{
 					{Type: formular.ItemHeader, ID: "live-title", Text: "Live Controls", Help: "Realtime controls"},
 					{Type: formular.ItemLabel, ID: "live-help", Text: "Use **carefully**", Format: formular.TextMarkdown},
+					{Type: formular.ItemProgressbar, ID: "live-progress", Label: "Live progress", Progress: &progress},
+					{Type: formular.ItemLogs, ID: "live-logs", Label: "Live logs", Logs: []formular.LogLine{
+						{Level: formular.LogTrace, Text: "trace line"},
+						{Level: formular.LogDebug, Text: "debug line"},
+						{Level: formular.LogInfo, Text: "info line"},
+						{Level: formular.LogWarn, Text: "warn line"},
+						{Level: formular.LogError, Text: "error line"},
+						{Level: formular.LogPanic, Text: "panic line"},
+					}},
 					{Type: formular.ItemField, ID: "query", Label: "Query", Field: &formular.Field{
 						Kind:          formular.FieldText,
 						Value:         "",

@@ -107,6 +107,153 @@ test("applies field status updates", () => {
   assert.equal(document.querySelector("input[type='text']").disabled, true);
 });
 
+test("block snapshots patch changed progress without interrupting active input", () => {
+  setupDom();
+  const outside = document.createElement("button");
+  outside.textContent = "Outside";
+  document.body.append(outside);
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    force: true,
+    blocks: [{
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "progressbar", id: "sync", label: "Sync", progress: 10 },
+        { type: "field", id: "name", kind: "text", label: "Name", value: "Ada" }
+      ]
+    }]
+  });
+
+  const input = document.querySelector("input[type='text']");
+  input.focus();
+  input.value = "Ada Lovelace";
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+  outside.focus();
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 1,
+    block: {
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "progressbar", id: "sync", label: "Sync", progress: 20 },
+        { type: "field", id: "name", kind: "text", label: "Name", value: "Ada" }
+      ]
+    }
+  });
+
+  assert.equal(document.activeElement, outside);
+  assert.equal(input.value, "Ada Lovelace");
+  assert.match(document.body.textContent, /20%/);
+});
+
+test("renders logs and patches appended log lines", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "logs", id: "events", label: "Events", logs: [{ level: "info", text: "Ready" }] }
+      ]
+    }]
+  });
+
+  assert.match(document.body.textContent, /\[info\]Ready/);
+  assert.equal(document.querySelector("[data-level='info']").textContent, "[info]");
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 1,
+    block: {
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        {
+          type: "logs",
+          id: "events",
+          label: "Events",
+          logs: [
+            { level: "info", text: "Ready" },
+            { level: "error", text: "<script>alert(1)</script>" }
+          ]
+        }
+      ]
+    }
+  });
+
+  assert.match(document.body.textContent, /\[error\]<script>alert\(1\)<\/script>/);
+  assert.equal(document.querySelectorAll("script").length, 0);
+});
+
+test("repeated logs snapshots do not corrupt sibling array fields", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = (logs) => ({
+    id: "main",
+    order: 1,
+    generation: 1,
+    form: false,
+    items: [
+      { type: "logs", id: "events", label: "Events", logs },
+      {
+        type: "field",
+        id: "rows",
+        kind: "array",
+        label: "Rows",
+        templates: [{ name: "row", items: [{ type: "field", id: "name", kind: "text", label: "Name", value: "one" }] }],
+        elements: [{ id: "row-1", template: "row", items: [{ type: "field", id: "name", kind: "text", label: "Name", value: "one" }] }]
+      }
+    ]
+  });
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [block([{ level: "info", text: "first" }])]
+  });
+  assert.doesNotThrow(() => {
+    menu.feed({
+      type: "block.snapshot",
+      menuId: "settings",
+      menuGeneration: 1,
+      blockGeneration: 1,
+      block: block([{ level: "info", text: "first" }, { level: "warn", text: "second" }])
+    });
+    menu.feed({
+      type: "block.snapshot",
+      menuId: "settings",
+      menuGeneration: 1,
+      blockGeneration: 1,
+      block: block([{ level: "info", text: "first" }, { level: "warn", text: "second" }, { level: "error", text: "third" }])
+    });
+  });
+  assert.match(document.body.textContent, /third/);
+  assert.match(document.body.textContent, /Rows/);
+});
+
 test("ignores messages for other menus", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

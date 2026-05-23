@@ -41,6 +41,7 @@ export interface Copyable {
 export type TextFormat = "plain" | "markdown" | "code";
 export type FieldKind = "text" | "int" | "float" | "file" | "checkbox" | "radio" | "range" | "array";
 export type ValidationStatus = "unset" | "ok" | "warn" | "error";
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "panic";
 
 export interface ItemBase {
   type: string;
@@ -58,6 +59,23 @@ export interface LabelItem extends ItemBase {
   text: string;
   format?: TextFormat;
   syntax?: string;
+}
+
+export interface ProgressbarItem extends ItemBase {
+  type: "progressbar";
+  label: string;
+  progress: number;
+}
+
+export interface LogLine {
+  level: LogLevel;
+  text: string;
+}
+
+export interface LogsItem extends ItemBase {
+  type: "logs";
+  label: string;
+  logs: LogLine[];
 }
 
 export interface ButtonItem extends ItemBase {
@@ -94,7 +112,7 @@ export interface FieldItem extends ItemBase {
   elements?: ArrayElement[];
 }
 
-export type Item = HeaderItem | LabelItem | ButtonItem | FieldItem;
+export type Item = HeaderItem | LabelItem | ProgressbarItem | LogsItem | ButtonItem | FieldItem;
 
 export interface ArrayTemplate {
   name: string;

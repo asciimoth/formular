@@ -53,7 +53,7 @@ Blocks are independently replaceable snapshots. Each block has:
 - `collapsible`: whether the frontend should expose local collapse controls.
 - `collapsed`: initial collapse state.
 - `copyable`: optional clipboard text for an explicit frontend copy action.
-- `items`: headers, labels, buttons, and fields.
+- `items`: headers, labels, progress bars, logs, buttons, and fields.
 
 The backend increments `menuGeneration` when blocks are added or removed.
 It increments a block `generation` when fields are added or removed,
@@ -79,6 +79,8 @@ and should ignore backend changes to `collapsed` except in a forced `menu.snapsh
 Each item has a `type`.
 - `header`: plain section heading. Headers have no levels and are not allowed inside array elements.
 - `label`: display text. `format` can be `plain`, `markdown`, or `code`; `syntax` may name a code highlighting language.
+- `progressbar`: readonly progress display with `label` and integer `progress` percentage from 0 to 100.
+- `logs`: readonly list of log lines with a colored `level` prefix. Levels are `trace`, `debug`, `info`, `warn`, `error`, and `panic`.
 - `button`: user action. Inactive buttons must not be triggerable.
 - `field`: user input.
 
@@ -89,6 +91,10 @@ Headers have no levels because Formular menus do not define nested sections.
 Plain labels are unformatted by default.
 Markdown labels intentionally do not define a strict markdown subset, but frontends should support basic links and text styling when practical.
 Code labels should be displayed as monospace text; syntax highlighting is optional and controlled by `syntax`.
+
+Progress bars are display-only items. Frontends should render `progress` as a bounded percentage and must not send frontend messages when it changes.
+
+Logs are display-only items. Each log line has a `level` and `text`; frontends should prepend the level before the text and visually distinguish levels when possible.
 
 Buttons can appear above, below, or between fields according to item order.
 When a button is activated, the frontend sends `button.press`.
@@ -330,6 +336,15 @@ Backends must validate array field values against their declared templates. Web 
       "form": true,
       "items": [
         { "type": "header", "id": "title", "text": "Account" },
+        { "type": "progressbar", "id": "sync", "label": "Sync", "progress": 40 },
+        {
+          "type": "logs",
+          "id": "events",
+          "label": "Events",
+          "logs": [
+            { "level": "info", "text": "Profile opened" }
+          ]
+        },
         {
           "type": "field",
           "id": "email",

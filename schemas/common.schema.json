@@ -45,6 +45,10 @@
       "type": "string",
       "enum": ["unset", "ok", "warn", "error"]
     },
+    "logLevel": {
+      "type": "string",
+      "enum": ["trace", "debug", "info", "warn", "error", "panic"]
+    },
     "fieldKind": {
       "type": "string",
       "enum": ["text", "int", "float", "file", "checkbox", "radio", "range", "array"]
@@ -133,6 +137,42 @@
         "help": { "type": "string" }
       }
     },
+    "progressbar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "label", "progress"],
+      "properties": {
+        "type": { "const": "progressbar" },
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string" },
+        "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "help": { "type": "string" }
+      }
+    },
+    "logs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "label", "logs"],
+      "properties": {
+        "type": { "const": "logs" },
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string" },
+        "logs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/logLine" }
+        },
+        "help": { "type": "string" }
+      }
+    },
+    "logLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "text"],
+      "properties": {
+        "level": { "$ref": "#/$defs/logLevel" },
+        "text": { "type": "string" }
+      }
+    },
     "field": {
       "type": "object",
       "additionalProperties": false,
@@ -187,6 +227,8 @@
       "oneOf": [
         { "$ref": "#/$defs/header" },
         { "$ref": "#/$defs/label" },
+        { "$ref": "#/$defs/progressbar" },
+        { "$ref": "#/$defs/logs" },
         { "$ref": "#/$defs/button" },
         { "$ref": "#/$defs/field" }
       ]
@@ -203,6 +245,8 @@
           "items": {
             "oneOf": [
               { "$ref": "#/$defs/label" },
+              { "$ref": "#/$defs/progressbar" },
+              { "$ref": "#/$defs/logs" },
               { "$ref": "#/$defs/button" },
               { "$ref": "#/$defs/field" }
             ]
@@ -222,6 +266,8 @@
           "items": {
             "oneOf": [
               { "$ref": "#/$defs/label" },
+              { "$ref": "#/$defs/progressbar" },
+              { "$ref": "#/$defs/logs" },
               { "$ref": "#/$defs/button" },
               { "$ref": "#/$defs/field" }
             ]

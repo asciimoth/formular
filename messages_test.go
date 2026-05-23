@@ -6,6 +6,7 @@ import "testing"
 func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 	readonly := true
 	min := 1.0
+	progress := uint(10)
 	original := MenuSnapshotMessage{
 		MessageBase: MessageBase{
 			Type:           MessageMenuSnapshot,
@@ -20,6 +21,8 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 				Form:       true,
 				Copyable:   &Copyable{Text: "copy"},
 				Items: []Item{
+					{Type: ItemProgressbar, ID: "sync", Label: "Sync", Progress: &progress},
+					{Type: ItemLogs, ID: "logs", Label: "Logs", Logs: []LogLine{{Level: LogInfo, Text: "ready"}}},
 					{
 						Type:  ItemField,
 						ID:    "email",
@@ -66,36 +69,44 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 	copied := original.Copy()
 
 	copied.Blocks[0].Copyable.Text = "changed"
-	copied.Blocks[0].Items[0].Field.Autocomplete.Tag = "changed"
-	copied.Blocks[0].Items[0].Field.Min = nil
-	copied.Blocks[0].Items[0].Field.Value.(map[string]any)["nested"].([]any)[0] = "changed"
-	copied.Blocks[0].Items[0].Field.AllowedValues[0].(map[string]any)["name"] = "changed"
-	copied.Blocks[0].Items[0].Field.Templates[0].Items[0].Label = "changed"
-	copied.Blocks[0].Items[0].Field.Elements[0].Copyable.Text = "changed"
-	copied.Blocks[0].Items[0].Field.Elements[0].Items[0].Field.Readonly = false
+	*copied.Blocks[0].Items[0].Progress = 20
+	copied.Blocks[0].Items[1].Logs[0].Text = "changed"
+	copied.Blocks[0].Items[2].Field.Autocomplete.Tag = "changed"
+	copied.Blocks[0].Items[2].Field.Min = nil
+	copied.Blocks[0].Items[2].Field.Value.(map[string]any)["nested"].([]any)[0] = "changed"
+	copied.Blocks[0].Items[2].Field.AllowedValues[0].(map[string]any)["name"] = "changed"
+	copied.Blocks[0].Items[2].Field.Templates[0].Items[0].Label = "changed"
+	copied.Blocks[0].Items[2].Field.Elements[0].Copyable.Text = "changed"
+	copied.Blocks[0].Items[2].Field.Elements[0].Items[0].Field.Readonly = false
 
 	if original.Blocks[0].Copyable.Text != "copy" {
 		t.Fatal("block copyable was shared")
 	}
-	if original.Blocks[0].Items[0].Field.Autocomplete.Tag != "email" {
+	if original.Blocks[0].Items[0].Progress == nil || *original.Blocks[0].Items[0].Progress != 10 {
+		t.Fatal("progress pointer was shared")
+	}
+	if original.Blocks[0].Items[1].Logs[0].Text != "ready" {
+		t.Fatal("logs were shared")
+	}
+	if original.Blocks[0].Items[2].Field.Autocomplete.Tag != "email" {
 		t.Fatal("autocomplete pointer was shared")
 	}
-	if original.Blocks[0].Items[0].Field.Min == nil || *original.Blocks[0].Items[0].Field.Min != 1 {
+	if original.Blocks[0].Items[2].Field.Min == nil || *original.Blocks[0].Items[2].Field.Min != 1 {
 		t.Fatal("numeric pointer was shared")
 	}
-	if got := original.Blocks[0].Items[0].Field.Value.(map[string]any)["nested"].([]any)[0]; got != "value" {
+	if got := original.Blocks[0].Items[2].Field.Value.(map[string]any)["nested"].([]any)[0]; got != "value" {
 		t.Fatal("field value was shared")
 	}
-	if got := original.Blocks[0].Items[0].Field.AllowedValues[0].(map[string]any)["name"]; got != "user@example.com" {
+	if got := original.Blocks[0].Items[2].Field.AllowedValues[0].(map[string]any)["name"]; got != "user@example.com" {
 		t.Fatal("allowed values were shared")
 	}
-	if original.Blocks[0].Items[0].Field.Templates[0].Items[0].Label != "Rotate" {
+	if original.Blocks[0].Items[2].Field.Templates[0].Items[0].Label != "Rotate" {
 		t.Fatal("array template items were shared")
 	}
-	if original.Blocks[0].Items[0].Field.Elements[0].Copyable.Text != "secret" {
+	if original.Blocks[0].Items[2].Field.Elements[0].Copyable.Text != "secret" {
 		t.Fatal("array element copyable was shared")
 	}
-	if !original.Blocks[0].Items[0].Field.Elements[0].Items[0].Field.Readonly {
+	if !original.Blocks[0].Items[2].Field.Elements[0].Items[0].Field.Readonly {
 		t.Fatal("array element field was shared")
 	}
 }

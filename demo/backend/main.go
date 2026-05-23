@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 	"syscall/js"
+	"time"
 
 	formular "github.com/asciimoth/formular"
 )
@@ -34,6 +35,13 @@ var liveValues = map[string]any{
 	"manualStatusMode": "unset",
 }
 
+var progressValue uint
+var instanceID int
+var logLines = []formular.LogLine{
+	{Level: formular.LogInfo, Text: "Demo backend initialized"},
+	{Level: formular.LogDebug, Text: "Waiting for form submissions"},
+}
+
 var serverValues = []serverState{{
 	ID:       "server-1",
 	Template: "http",
@@ -45,9 +53,26 @@ var serverValues = []serverState{{
 
 func main() {
 	done := make(chan struct{})
+	instanceID = nextInstanceID()
 	js.Global().Set("formularBackendSend", js.FuncOf(receive))
 	sendSnapshots()
+	go progressLoop(instanceID)
 	<-done
+}
+
+func nextInstanceID() int {
+	current := js.Global().Get("formularBackendInstance")
+	next := 1
+	if current.Type() == js.TypeNumber {
+		next = current.Int() + 1
+	}
+	js.Global().Set("formularBackendInstance", next)
+	return next
+}
+
+func currentInstance(id int) bool {
+	current := js.Global().Get("formularBackendInstance")
+	return current.Type() == js.TypeNumber && current.Int() == id
 }
 
 func receive(this js.Value, args []js.Value) any {
@@ -70,7 +95,6 @@ func receive(this js.Value, args []js.Value) any {
 		button(menuID, msg)
 	case formular.MessageFormApply:
 		applyForm(menuID, msg)
-		ack(menuID, "profile", "Form values accepted by Go WASM backend")
 	case formular.MessageFieldUpdate:
 		updateField(menuID, msg)
 		ack(menuID, "live", "Realtime update received")
@@ -84,11 +108,33 @@ func sendSnapshots() {
 }
 
 func send(v any) {
+	if !currentInstance(instanceID) {
+		return
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		return
 	}
 	js.Global().Call("formularFrontendDispatch", string(data))
+}
+
+func progressLoop(id int) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		if !currentInstance(id) {
+			return
+		}
+		if progressValue >= 100 {
+			progressValue = 0
+		} else {
+			progressValue += 10
+		}
+		send(formular.BlockSnapshotMessage{
+			MessageBase: formular.MessageBase{Type: formular.MessageBlockSnapshot, MenuID: "left", MenuGeneration: 1, BlockGeneration: 1},
+			Block:       leftBlocks()[0],
+		})
+	}
 }
 
 func snapshot(menuID string, generation uint64, blocks []formular.Block) formular.MenuSnapshotMessage {
@@ -185,12 +231,45 @@ func applyForm(menuID string, msg map[string]any) {
 	if menuID != "left" {
 		return
 	}
+	blockID, _ := msg["blockId"].(string)
 	values, ok := msg["values"].(map[string]any)
 	if !ok {
 		return
 	}
+	if blockID == "log-submit" {
+		appendSubmittedLog(values)
+		ack(menuID, "log-submit", "Log line submitted")
+		return
+	}
 	for key, value := range values {
 		profileValues[key] = value
+	}
+	ack(menuID, "profile", "Form values accepted by Go WASM backend")
+}
+
+func appendSubmittedLog(values map[string]any) {
+	level, _ := values["level"].(string)
+	if !validLogLevel(level) {
+		level = formular.LogInfo
+	}
+	message, _ := values["message"].(string)
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "Submitted log line"
+	}
+	logLines = append(logLines, formular.LogLine{Level: level, Text: message})
+	send(formular.BlockSnapshotMessage{
+		MessageBase: formular.MessageBase{Type: formular.MessageBlockSnapshot, MenuID: "right", MenuGeneration: 1, BlockGeneration: 1},
+		Block:       rightBlocks()[0],
+	})
+}
+
+func validLogLevel(level string) bool {
+	switch level {
+	case formular.LogTrace, formular.LogDebug, formular.LogInfo, formular.LogWarn, formular.LogError, formular.LogPanic:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -303,6 +382,7 @@ func leftBlocks() []formular.Block {
 			Items: []formular.Item{
 				{Type: formular.ItemHeader, ID: "title", Text: "Profile form"},
 				{Type: formular.ItemLabel, ID: "intro", Text: "Markdown **label** with `code` and [link](https://example.com).", Format: formular.TextMarkdown},
+				{Type: formular.ItemProgressbar, ID: "sync-progress", Label: "Background sync", Progress: &progressValue},
 				field("name", formular.FieldText, "Name", profileValue("name", "Ada"), func(f *formular.Field) {
 					f.Required = true
 					f.Validation = true
@@ -328,6 +408,28 @@ func leftBlocks() []formular.Block {
 					maxBytes := uint64(4098)
 					f.MaxBytes = &maxBytes
 					f.Accept = []string{"image/png", "image/jpeg"}
+				}),
+			},
+		},
+		{
+			ID:         "log-submit",
+			Order:      20,
+			Generation: 1,
+			Form:       true,
+			Items: []formular.Item{
+				{Type: formular.ItemHeader, ID: "title", Text: "Submit log"},
+				field("level", formular.FieldRadio, "Level", formular.LogInfo, func(f *formular.Field) {
+					f.AllowedValues = []any{
+						formular.LogTrace,
+						formular.LogDebug,
+						formular.LogInfo,
+						formular.LogWarn,
+						formular.LogError,
+						formular.LogPanic,
+					}
+				}),
+				field("message", formular.FieldText, "Message", "User submitted log line", func(f *formular.Field) {
+					f.Required = true
 				}),
 			},
 		},
@@ -362,6 +464,7 @@ func rightBlocks() []formular.Block {
 				}),
 				{Type: formular.ItemButton, ID: "refresh", Label: "Refresh"},
 				{Type: formular.ItemLabel, ID: "code", Text: "go test ./...", Format: formular.TextCode, Syntax: "sh"},
+				{Type: formular.ItemLogs, ID: "activity-log", Label: "Activity log", Logs: logLines},
 				field("servers", formular.FieldArray, "Servers", nil, func(f *formular.Field) {
 					f.Templates = templates
 					f.Elements = serverElements()

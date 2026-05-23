@@ -20,6 +20,25 @@ const DEFAULT_THEME = `
 .formular-label{color:#cdd6f4}
 .formular-label pre{background:#11111b;border:1px solid #313244;border-radius:6px;margin:0;overflow:auto;padding:10px}
 .formular-label code,.formular-field-code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.formular-progressbar{display:flex;flex-direction:column;gap:5px}
+.formular-progressbar-row{align-items:center;display:flex;gap:10px}
+.formular-progressbar-label{color:#bac2de;font-weight:650}
+.formular-progressbar-value{color:#a6adc8;font-variant-numeric:tabular-nums;min-width:4ch;text-align:right}
+.formular-progressbar-meter{appearance:none;background:#11111b;border:1px solid #45475a;border-radius:6px;height:14px;overflow:hidden;width:100%}
+.formular-progressbar-meter::-webkit-progress-bar{background:#11111b}
+.formular-progressbar-meter::-webkit-progress-value{background:#89b4fa}
+.formular-progressbar-meter::-moz-progress-bar{background:#89b4fa}
+.formular-logs{display:flex;flex-direction:column;gap:6px}
+.formular-logs-label{color:#bac2de;font-weight:650}
+.formular-logs-list{background:#11111b;border:1px solid #313244;border-radius:6px;display:flex;flex-direction:column;font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;gap:3px;margin:0;max-height:180px;overflow:auto;padding:8px}
+.formular-log-line{align-items:baseline;display:flex;gap:8px;white-space:pre-wrap}
+.formular-log-prefix{font-weight:800;text-transform:uppercase}
+.formular-log-prefix[data-level="trace"]{color:#9399b2}
+.formular-log-prefix[data-level="debug"]{color:#89b4fa}
+.formular-log-prefix[data-level="info"]{color:#a6e3a1}
+.formular-log-prefix[data-level="warn"]{color:#f9e2af}
+.formular-log-prefix[data-level="error"]{color:#f38ba8}
+.formular-log-prefix[data-level="panic"]{color:#fab387}
 .formular-field{display:flex;flex-direction:column;gap:5px}
 .formular-field-row{align-items:center;display:flex;gap:10px;min-height:34px}
 .formular-field-label{color:#bac2de;font-weight:650}
@@ -139,6 +158,7 @@ export class FormularMenu {
     this.blocks = new Map();
     this.menuGeneration = 0;
     this.values = new Map();
+    this.dirtyValues = new Set();
     this.focusedField = null;
     this.localElementCounter = 0;
     this.destroyed = false;
@@ -155,10 +175,15 @@ export class FormularMenu {
     if (this.destroyed || !message || message.menuId !== this.menuId) return false;
     if (message.type === "menu.snapshot") {
       this.menuGeneration = message.menuGeneration || 0;
-      this.blocks.clear();
-      this.values.clear();
-      for (const block of message.blocks || []) this.blocks.set(block.id, clone(block));
-      this.render();
+      if (message.force) {
+        this.blocks.clear();
+        this.values.clear();
+        this.dirtyValues.clear();
+        for (const block of message.blocks || []) this.blocks.set(block.id, clone(block));
+        this.render();
+      } else {
+        this.applyMenuSnapshot(message.blocks || []);
+      }
       this.requestInitialValidation();
       return true;
     }
@@ -170,6 +195,7 @@ export class FormularMenu {
     }
     if (message.type === "block.delete") {
       this.blocks.delete(message.blockId);
+      this.clearBlockDirtyValues(message.blockId);
       this.deleteBlockNode(message.blockId);
       return true;
     }
@@ -225,6 +251,22 @@ export class FormularMenu {
     this.root.replaceChildren(...blocks.map((block) => this.renderBlock(block)));
   }
 
+  applyMenuSnapshot(blocks) {
+    const nextIDs = new Set();
+    for (const block of blocks) {
+      nextIDs.add(block.id);
+      this.blocks.set(block.id, clone(block));
+    }
+    for (const blockId of [...this.blocks.keys()]) {
+      if (!nextIDs.has(blockId)) {
+        this.blocks.delete(blockId);
+        this.clearBlockDirtyValues(blockId);
+        this.deleteBlockNode(blockId);
+      }
+    }
+    for (const block of this.sortedBlocks()) this.renderBlockById(block.id);
+  }
+
   sortedBlocks() {
     return [...this.blocks.values()].sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id));
   }
@@ -236,18 +278,120 @@ export class FormularMenu {
       this.deleteBlockNode(blockId);
       return;
     }
-    const next = this.renderBlock(block);
     const current = this.blockNode(blockId);
     if (current) {
+      const previous = current.__formularBlock;
+      if (previous && this.patchBlock(current, previous, block)) return;
+      const next = this.renderBlock(block);
       current.replaceWith(next);
       return;
     }
+    const next = this.renderBlock(block);
     const empty = this.root.querySelector(`.${css(this.prefix, "empty")}`);
     empty?.remove();
     const blocks = this.sortedBlocks();
     const index = blocks.findIndex((item) => item.id === blockId);
     const before = blocks.slice(index + 1).map((item) => this.blockNode(item.id)).find(Boolean);
     this.root.insertBefore(next, before || null);
+  }
+
+  patchBlock(node, previous, next) {
+    if (!this.canPatchBlock(previous, next)) return false;
+    node.dataset.inactive = String(Boolean(next.inactive));
+    const title = node.querySelector(`.${css(this.prefix, "block-title")}`);
+    if (title) title.textContent = next.id;
+    const body = node.querySelector(`.${css(this.prefix, "block-body")}`);
+    if (!body) return false;
+    for (const item of next.items || []) {
+      const child = [...body.children].find((element) => element.dataset.formularItemId === item.id);
+      if (!child || child.dataset.formularItemType !== item.type || !this.patchItem(child, item)) return false;
+    }
+    this.updateFormActions(next);
+    node.__formularBlock = clone(next);
+    return true;
+  }
+
+  canPatchBlock(previous, next) {
+    if (previous.id !== next.id || Boolean(previous.form) !== Boolean(next.form) || Boolean(previous.inactive) !== Boolean(next.inactive) || Boolean(previous.collapsible) !== Boolean(next.collapsible)) return false;
+    const previousItems = previous.items || [];
+    const nextItems = next.items || [];
+    if (previousItems.length !== nextItems.length) return false;
+    for (let i = 0; i < previousItems.length; i += 1) {
+      const before = previousItems[i];
+      const after = nextItems[i];
+      if (before.id !== after.id || before.type !== after.type) return false;
+      if (before.type === "field" && before.kind !== after.kind) return false;
+    }
+    return true;
+  }
+
+  patchItem(node, item) {
+    if (item.type === "header") {
+      node.textContent = item.text || "";
+      node.title = item.help || "";
+      return true;
+    }
+    if (item.type === "label") {
+      const next = this.renderLabel(item);
+      node.replaceChildren(...next.childNodes);
+      node.title = item.help || "";
+      return true;
+    }
+    if (item.type === "progressbar") {
+      this.updateProgressbarDOM(node, item);
+      node.title = item.help || "";
+      return true;
+    }
+    if (item.type === "logs") {
+      this.updateLogsDOM(node, item);
+      node.title = item.help || "";
+      return true;
+    }
+    if (item.type === "button") {
+      node.textContent = item.label || item.id;
+      node.disabled = Boolean(item.inactive);
+      node.title = item.help || "";
+      return true;
+    }
+    if (item.type === "field") {
+      if (item.kind === "array") return false;
+      this.patchFieldDOM(node, item);
+      return true;
+    }
+    return false;
+  }
+
+  patchFieldDOM(node, field) {
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const hasFocus = active && node.contains(active);
+    const ref = { blockId: node.closest("[data-block-id]")?.dataset.blockId || "", fieldId: field.id };
+    const label = node.querySelector(`.${css(this.prefix, "field-label")}`);
+    if (label) {
+      label.textContent = field.label || field.id;
+      if (field.required) {
+        const required = document.createElement("span");
+        required.className = css(this.prefix, "required");
+        required.textContent = " *";
+        label.append(required);
+      }
+    }
+    const help = node.querySelector(`.${css(this.prefix, "help")}`);
+    if (help) help.textContent = field.help || "";
+    this.updateFieldStatusDOM(ref, field);
+    const key = valueKey(ref);
+    const value = this.dirtyValues.has(key) ? this.values.get(key) : clone(field.value ?? null);
+    if (!this.dirtyValues.has(key)) this.values.set(key, value);
+    if (hasFocus) return;
+    const control = node.querySelector("input, select, textarea");
+    if (!control || control.type === "file") return;
+    if (control.type === "checkbox") control.checked = Boolean(value);
+    else if (control.type === "radio") {
+      for (const radio of node.querySelectorAll("input[type='radio']")) radio.checked = radio.value === JSON.stringify(value);
+    } else if (control.tagName === "SELECT") {
+      control.value = JSON.stringify(value);
+    } else {
+      control.value = value == null ? "" : String(value);
+    }
   }
 
   deleteBlockNode(blockId) {
@@ -264,6 +408,7 @@ export class FormularMenu {
     section.className = css(this.prefix, "block");
     section.dataset.blockId = block.id;
     section.dataset.inactive = String(Boolean(block.inactive));
+    section.__formularBlock = clone(block);
 
     const header = document.createElement("div");
     header.className = css(this.prefix, "block-header");
@@ -296,19 +441,28 @@ export class FormularMenu {
   }
 
   renderItem(block, item, elementPath, disabled) {
+    let node;
     if (item.type === "header") {
-      const node = document.createElement("div");
+      node = document.createElement("div");
       node.className = css(this.prefix, "header");
       node.textContent = item.text || "";
       if (item.help) node.title = item.help;
-      return node;
+      return this.markItemNode(node, item);
     }
-    if (item.type === "label") return this.renderLabel(item);
-    if (item.type === "button") return this.renderActionButton(block, item, elementPath, disabled);
-    if (item.type === "field") return this.renderField(block, item, elementPath, disabled);
+    if (item.type === "label") return this.markItemNode(this.renderLabel(item), item);
+    if (item.type === "progressbar") return this.markItemNode(this.renderProgressbar(item), item);
+    if (item.type === "logs") return this.markItemNode(this.renderLogs(item), item);
+    if (item.type === "button") return this.markItemNode(this.renderActionButton(block, item, elementPath, disabled), item);
+    if (item.type === "field") return this.markItemNode(this.renderField(block, item, elementPath, disabled), item);
     const unknown = document.createElement("div");
     unknown.textContent = `Unsupported item: ${item.type}`;
-    return unknown;
+    return this.markItemNode(unknown, item);
+  }
+
+  markItemNode(node, item) {
+    node.dataset.formularItemId = item.id;
+    node.dataset.formularItemType = item.type;
+    return node;
   }
 
   renderLabel(item) {
@@ -327,6 +481,71 @@ export class FormularMenu {
       node.textContent = item.text || "";
     }
     return node;
+  }
+
+  renderProgressbar(item) {
+    const node = document.createElement("div");
+    node.className = css(this.prefix, "progressbar");
+    if (item.help) node.title = item.help;
+    const row = document.createElement("div");
+    row.className = css(this.prefix, "progressbar-row");
+    const label = document.createElement("span");
+    label.className = css(this.prefix, "progressbar-label");
+    label.textContent = item.label || item.id;
+    const value = document.createElement("span");
+    value.className = css(this.prefix, "progressbar-value");
+    const meter = document.createElement("progress");
+    meter.className = css(this.prefix, "progressbar-meter");
+    meter.max = 100;
+    row.append(label, value);
+    node.append(row, meter);
+    this.updateProgressbarDOM(node, item);
+    return node;
+  }
+
+  updateProgressbarDOM(node, item) {
+    const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
+    const label = node.querySelector(`.${css(this.prefix, "progressbar-label")}`);
+    const value = node.querySelector(`.${css(this.prefix, "progressbar-value")}`);
+    const meter = node.querySelector(`.${css(this.prefix, "progressbar-meter")}`);
+    if (label) label.textContent = item.label || item.id;
+    if (value) value.textContent = `${progress}%`;
+    if (meter) {
+      meter.value = progress;
+      meter.setAttribute("aria-label", item.label || item.id);
+    }
+  }
+
+  renderLogs(item) {
+    const node = document.createElement("div");
+    node.className = css(this.prefix, "logs");
+    if (item.help) node.title = item.help;
+    const label = document.createElement("div");
+    label.className = css(this.prefix, "logs-label");
+    const list = document.createElement("div");
+    list.className = css(this.prefix, "logs-list");
+    node.append(label, list);
+    this.updateLogsDOM(node, item);
+    return node;
+  }
+
+  updateLogsDOM(node, item) {
+    const label = node.querySelector(`.${css(this.prefix, "logs-label")}`);
+    const list = node.querySelector(`.${css(this.prefix, "logs-list")}`);
+    if (label) label.textContent = item.label || item.id;
+    if (!list) return;
+    list.replaceChildren(...(item.logs || []).map((line) => {
+      const row = document.createElement("div");
+      row.className = css(this.prefix, "log-line");
+      const prefix = document.createElement("span");
+      prefix.className = css(this.prefix, "log-prefix");
+      prefix.dataset.level = line.level || "info";
+      prefix.textContent = `[${line.level || "info"}]`;
+      const body = document.createElement("span");
+      body.textContent = line.text || "";
+      row.append(prefix, body);
+      return row;
+    }));
   }
 
   renderActionButton(block, item, elementPath, disabled) {
@@ -590,10 +809,12 @@ export class FormularMenu {
   }
 
   setValue(block, field, ref, value) {
-    this.values.set(valueKey(ref), value);
+    const key = valueKey(ref);
+    this.values.set(key, value);
+    this.dirtyValues.add(key);
     if (ref.elementPath?.length) this.syncNestedValue(ref, value);
     if (field.kind !== "array") return;
-    this.values.set(valueKey(ref), value);
+    this.values.set(key, value);
   }
 
   commitField(block, field, ref, value) {
@@ -734,7 +955,11 @@ export class FormularMenu {
   getArrayElements(ref, field) {
     const key = valueKey(ref);
     if (!this.values.has(key)) this.values.set(key, clone(field.elements || []));
-    return this.values.get(key);
+    const elements = this.values.get(key);
+    if (Array.isArray(elements)) return elements;
+    const next = clone(field.elements || []);
+    this.values.set(key, next);
+    return next;
   }
 
   addArrayElement(block, field, ref, templateName) {
@@ -747,7 +972,9 @@ export class FormularMenu {
       items: clone(template.items || [])
     };
     elements.push(element);
-    this.values.set(valueKey(ref), elements);
+    const key = valueKey(ref);
+    this.values.set(key, elements);
+    this.dirtyValues.add(key);
     const value = this.arrayWireValues(elements);
     if (field.validate) this.send({ type: "field.validate", ...this.base(block), field: ref, value });
     if (!block.form) this.send({ type: "field.update", ...this.base(block), field: ref, value });
@@ -756,7 +983,9 @@ export class FormularMenu {
 
   removeArrayElement(block, field, ref, elementId) {
     const elements = this.getArrayElements(ref, field).filter((element) => element.id !== elementId);
-    this.values.set(valueKey(ref), elements);
+    const key = valueKey(ref);
+    this.values.set(key, elements);
+    this.dirtyValues.add(key);
     const value = this.arrayWireValues(elements);
     if (field.validate) this.send({ type: "field.validate", ...this.base(block), field: ref, value });
     if (!block.form) this.send({ type: "field.update", ...this.base(block), field: ref, value });
@@ -806,7 +1035,16 @@ export class FormularMenu {
 
   clearBlockValues(block) {
     for (const key of [...this.values.keys()]) {
-      if (key.startsWith(`${block.id}\n`)) this.values.delete(key);
+      if (key.startsWith(`${block.id}\n`)) {
+        this.values.delete(key);
+        this.dirtyValues.delete(key);
+      }
+    }
+  }
+
+  clearBlockDirtyValues(blockId) {
+    for (const key of [...this.dirtyValues]) {
+      if (key.startsWith(`${blockId}\n`)) this.dirtyValues.delete(key);
     }
   }
 

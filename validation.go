@@ -179,6 +179,13 @@ func (i Item) Validate() error {
 	return v.err()
 }
 
+// Validate returns an error if l is not a valid log line.
+func (l LogLine) Validate() error {
+	var v validator
+	v.logLine("logLine", l)
+	return v.err()
+}
+
 // Validate returns an error if f is not a valid field.
 func (f Field) Validate() error {
 	var v validator
@@ -324,6 +331,31 @@ func (v *validator) item(path string, item Item, inArrayElement bool) {
 		if item.Field != nil {
 			v.add(path+".field", "must be nil for label items")
 		}
+	case ItemProgressbar:
+		if item.Label == "" {
+			v.add(path+".label", "must not be empty for progressbar items")
+		}
+		if item.Progress == nil {
+			v.add(path+".progress", "must not be nil for progressbar items")
+		} else if *item.Progress > 100 {
+			v.add(path+".progress", "must be between 0 and 100")
+		}
+		if item.Field != nil {
+			v.add(path+".field", "must be nil for progressbar items")
+		}
+	case ItemLogs:
+		if item.Label == "" {
+			v.add(path+".label", "must not be empty for logs items")
+		}
+		if item.Logs == nil {
+			v.add(path+".logs", "must not be nil for logs items")
+		}
+		for i, line := range item.Logs {
+			v.logLine(indexPath(path+".logs", i), line)
+		}
+		if item.Field != nil {
+			v.add(path+".field", "must be nil for logs items")
+		}
 	case ItemButton:
 		if item.Label == "" {
 			v.add(path+".label", "must not be empty for button items")
@@ -341,7 +373,14 @@ func (v *validator) item(path string, item Item, inArrayElement bool) {
 		}
 		v.field(path, *item.Field, inArrayElement)
 	default:
-		v.add(path+".type", "must be one of header, label, button, field")
+		v.add(path+".type", "must be one of header, label, progressbar, logs, button, field")
+	}
+}
+
+func (v *validator) logLine(path string, line LogLine) {
+	v.logLevel(path+".level", line.Level)
+	if line.Text == "" {
+		v.add(path+".text", "must not be empty")
 	}
 }
 
@@ -762,6 +801,14 @@ func (v *validator) validationStatus(path, value string, required bool) {
 	case StatusUnset, StatusOK, StatusWarn, StatusError:
 	default:
 		v.add(path, "must be one of unset, ok, warn, error")
+	}
+}
+
+func (v *validator) logLevel(path, value string) {
+	switch value {
+	case LogTrace, LogDebug, LogInfo, LogWarn, LogError, LogPanic:
+	default:
+		v.add(path, "must be one of trace, debug, info, warn, error, panic")
 	}
 }
 
