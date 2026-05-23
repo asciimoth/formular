@@ -39,6 +39,6 @@ go.work.sum
 node_modules/
 test-results/
 playwright-report/
+dist/
 demo/public/formular-demo.wasm
 demo/public/wasm_exec.js
-

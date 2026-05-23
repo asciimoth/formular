@@ -25,6 +25,9 @@ typecheck:
 wasm:
     pnpm run prepare:demo
 
+pages:
+    pnpm run build:pages
+
 e2e:
     pnpm test:e2e
 
@@ -39,4 +42,3 @@ pack:
 clean:
     rm -rf test-results playwright-report
     rm -f demo/public/formular-demo.wasm demo/public/wasm_exec.js
-
