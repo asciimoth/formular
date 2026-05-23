@@ -306,8 +306,8 @@ type Field struct {
 	Readonly bool `json:"readonly,omitempty"`
 	// Required means frontend apply is blocked while the value is empty.
 	Required bool `json:"required,omitempty"`
-	// Validate means frontend should send field.validate messages for changes.
-	Validate bool `json:"validate,omitempty"`
+	// Validation means frontend should send field.validate messages for changes.
+	Validation bool `json:"validate,omitempty"`
 	// Status is a backend-provided validation state.
 	Status string `json:"status,omitempty"`
 	// StatusText is optional explanatory text for Status.
