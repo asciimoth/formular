@@ -38,6 +38,7 @@ var liveValues = map[string]any{
 
 var progressValue uint
 var instanceID int
+var generatedServerCounter int
 var logLines = []formular.LogLine{
 	{Level: formular.LogInfo, Text: "Demo backend initialized"},
 	{Level: formular.LogDebug, Text: "Waiting for form submissions"},
@@ -205,7 +206,59 @@ func button(menuID string, msg map[string]any) {
 		ack(menuID, "live", "Refresh button pressed")
 		return
 	}
+	if menuID == "right" && buttonID == "generate" {
+		generateServerElement(msg)
+		return
+	}
 	ack(menuID, "profile", "Button "+buttonID+" pressed")
+}
+
+func generateServerElement(msg map[string]any) {
+	path := elementPath(msg)
+	if len(path) == 0 {
+		return
+	}
+	segment := path[len(path)-1]
+	if segment.ArrayFieldID != "servers" {
+		return
+	}
+	for i := range serverValues {
+		if serverValues[i].ID != segment.ElementID {
+			continue
+		}
+		generatedServerCounter++
+		serverValues[i].Values = generatedServerValues(serverValues[i].Template, generatedServerCounter)
+		send(formular.BlockSnapshotMessage{
+			MessageBase: formular.MessageBase{Type: formular.MessageBlockSnapshot, MenuID: "right", MenuGeneration: 1, BlockGeneration: 1},
+			Block:       rightBlocks()[0],
+		})
+		return
+	}
+}
+
+func generatedServerValues(template string, counter int) map[string]any {
+	switch template {
+	case "database":
+		drivers := []any{"postgres", "mysql", "sqlite"}
+		return map[string]any{
+			"driver": drivers[counter%len(drivers)],
+			"dsn":    "postgres://generated-" + jsonNumberText(counter) + ".local/app",
+			"pool":   5 + counter,
+		}
+	case "queue":
+		brokers := []any{"nats", "redis", "rabbitmq"}
+		return map[string]any{
+			"broker":  brokers[counter%len(brokers)],
+			"subject": "events.generated." + jsonNumberText(counter),
+			"durable": counter%2 == 0,
+		}
+	default:
+		return map[string]any{
+			"host": "generated-" + jsonNumberText(counter) + ".local",
+			"port": 8000 + counter,
+			"tls":  counter%2 == 0,
+		}
+	}
 }
 
 func ack(menuID, blockID, text string) {
@@ -228,16 +281,28 @@ func fieldRef(msg map[string]any) formular.FieldRef {
 	ref := formular.FieldRef{}
 	ref.BlockID, _ = raw["blockId"].(string)
 	ref.FieldID, _ = raw["fieldId"].(string)
-	if path, ok := raw["elementPath"].([]any); ok {
-		for _, item := range path {
-			segRaw, _ := item.(map[string]any)
-			seg := formular.ElementPathSegment{}
-			seg.ArrayFieldID, _ = segRaw["arrayFieldId"].(string)
-			seg.ElementID, _ = segRaw["elementId"].(string)
-			ref.ElementPath = append(ref.ElementPath, seg)
-		}
-	}
+	ref.ElementPath = parseElementPath(raw["elementPath"])
 	return ref
+}
+
+func elementPath(msg map[string]any) []formular.ElementPathSegment {
+	return parseElementPath(msg["elementPath"])
+}
+
+func parseElementPath(raw any) []formular.ElementPathSegment {
+	var out []formular.ElementPathSegment
+	path, ok := raw.([]any)
+	if !ok {
+		return out
+	}
+	for _, item := range path {
+		segRaw, _ := item.(map[string]any)
+		seg := formular.ElementPathSegment{}
+		seg.ArrayFieldID, _ = segRaw["arrayFieldId"].(string)
+		seg.ElementID, _ = segRaw["elementId"].(string)
+		out = append(out, seg)
+	}
+	return out
 }
 
 func applyForm(menuID string, msg map[string]any) {
@@ -517,6 +582,7 @@ func serverTemplates() []formular.ArrayTemplate {
 				withHelp(field("host", formular.FieldText, "Host", "localhost", nil), "Hostname used by new HTTP server elements."),
 				withHelp(field("port", formular.FieldInt, "Port", 8080, nil), "Integer port for the HTTP endpoint."),
 				withHelp(field("tls", formular.FieldCheckbox, "TLS", false, nil), "Toggles whether the endpoint should use TLS."),
+				{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Asks the backend to generate fresh values for this element."},
 				{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Nested buttons include their array element path in button.press messages."},
 			},
 		},
@@ -529,6 +595,7 @@ func serverTemplates() []formular.ArrayTemplate {
 				}), "Database driver choice for new database elements."),
 				withHelp(field("dsn", formular.FieldText, "DSN", "postgres://localhost/app", nil), "Connection string for the database element."),
 				withHelp(field("pool", formular.FieldInt, "Pool size", 10, nil), "Maximum connection pool size."),
+				{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Asks the backend to generate fresh values for this element."},
 				{Type: formular.ItemButton, ID: "test", Label: "Test connection", Help: "Nested action for the selected database element."},
 			},
 		},
@@ -541,6 +608,7 @@ func serverTemplates() []formular.ArrayTemplate {
 				}), "Broker choice for new queue elements."),
 				withHelp(field("subject", formular.FieldText, "Subject", "events.created", nil), "Subject, topic, or routing key consumed by the queue."),
 				withHelp(field("durable", formular.FieldCheckbox, "Durable", true, nil), "Whether queue state should survive broker restarts."),
+				{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Asks the backend to generate fresh values for this element."},
 				{Type: formular.ItemButton, ID: "drain", Label: "Drain", Help: "Nested action for the selected queue element."},
 			},
 		},
@@ -574,6 +642,7 @@ func serverElementItems(server serverState) []formular.Item {
 			}), "Database driver for this element."),
 			withHelp(field("dsn", formular.FieldText, "DSN", serverValue(server, "dsn", "postgres://localhost/app"), nil), "Connection string for this database element."),
 			withHelp(field("pool", formular.FieldInt, "Pool size", serverValue(server, "pool", 10), nil), "Maximum pool size for this database element."),
+			{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Generates fresh database values for this element."},
 			{Type: formular.ItemButton, ID: "test", Label: "Test connection", Help: "Sends a nested button press for this database element."},
 		}
 	case "queue":
@@ -583,6 +652,7 @@ func serverElementItems(server serverState) []formular.Item {
 			}), "Broker for this queue element."),
 			withHelp(field("subject", formular.FieldText, "Subject", serverValue(server, "subject", "events.created"), nil), "Subject, topic, or routing key for this element."),
 			withHelp(field("durable", formular.FieldCheckbox, "Durable", serverValue(server, "durable", true), nil), "Whether this queue element should be durable."),
+			{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Generates fresh queue values for this element."},
 			{Type: formular.ItemButton, ID: "drain", Label: "Drain", Help: "Sends a nested button press for this queue element."},
 		}
 	default:
@@ -590,6 +660,7 @@ func serverElementItems(server serverState) []formular.Item {
 			withHelp(field("host", formular.FieldText, "Host", serverValue(server, "host", "localhost"), nil), "Host for this HTTP server element."),
 			withHelp(field("port", formular.FieldInt, "Port", serverValue(server, "port", 8080), nil), "Port for this HTTP server element."),
 			withHelp(field("tls", formular.FieldCheckbox, "TLS", serverValue(server, "tls", false), nil), "Whether this HTTP server element uses TLS."),
+			{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Generates fresh HTTP server values for this element."},
 			{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Sends a nested button press for this HTTP server element."},
 		}
 	}

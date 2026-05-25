@@ -180,6 +180,25 @@ test("array templates can add database element and survive frontend restart", as
   await expect(page.getByLabel("Pool size")).toHaveValue("24");
 });
 
+test("array element generate button asks backend for fresh values", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const firstServer = page.locator("#right-menu .formular-element").filter({ hasText: "Servers: server-1" });
+  await expect(firstServer.getByLabel("Host")).toHaveValue("localhost");
+  await firstServer.getByRole("button", { name: "Generate" }).click();
+  await expect(firstServer.getByLabel("Host")).toHaveValue("generated-1.local");
+  await expect(firstServer.getByLabel("Port")).toHaveValue("8001");
+
+  await page.locator(".formular-array select").selectOption("database");
+  await page.getByRole("button", { name: "+" }).click();
+  const generatedDatabase = page.locator("#right-menu .formular-element").filter({ hasText: /Servers: local-/ });
+  await generatedDatabase.getByRole("button", { name: "Generate" }).click();
+
+  await expect(generatedDatabase.getByLabel("DSN")).toHaveValue("postgres://generated-2.local/app");
+  await expect(generatedDatabase.getByLabel("Pool size")).toHaveValue("7");
+});
+
 test("file input keeps selected file after frontend reads it", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

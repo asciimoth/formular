@@ -1005,12 +1005,93 @@ export class FormularMenu {
 
   getArrayElements(ref, field) {
     const key = valueKey(ref);
-    if (!this.values.has(key)) this.values.set(key, clone(field.elements || []));
+    const backend = clone(field.elements || []);
+    if (!this.values.has(key)) {
+      this.values.set(key, backend);
+      this.syncArrayChildValues(ref, backend);
+      return backend;
+    }
     const elements = this.values.get(key);
-    if (Array.isArray(elements)) return elements;
-    const next = clone(field.elements || []);
+    if (Array.isArray(elements)) {
+      const next = this.hasDirtyArrayValues(ref, elements)
+        ? this.mergeArrayElements(ref, elements, backend)
+        : backend;
+      this.values.set(key, next);
+      this.syncArrayChildValues(ref, next);
+      return next;
+    }
+    const next = backend;
     this.values.set(key, next);
+    this.syncArrayChildValues(ref, next);
     return next;
+  }
+
+  hasDirtyArrayValues(ref, elements) {
+    if (this.dirtyValues.has(valueKey(ref))) return true;
+    for (const element of elements || []) {
+      const nextPath = [...(ref.elementPath || []), { arrayFieldId: ref.fieldId, elementId: element.id }];
+      for (const item of element.items || []) {
+        if (item.type !== "field") continue;
+        const childRef = { blockId: ref.blockId, fieldId: item.id, elementPath: nextPath };
+        if (this.dirtyValues.has(valueKey(childRef))) return true;
+        if (item.kind === "array" && this.hasDirtyArrayValues(childRef, item.elements || [])) return true;
+      }
+    }
+    return false;
+  }
+
+  mergeArrayElements(ref, currentElements, backendElements) {
+    const currentById = new Map((currentElements || []).map((element) => [element.id, element]));
+    const merged = (backendElements || []).map((backendElement) => {
+      const currentElement = currentById.get(backendElement.id);
+      if (!currentElement || currentElement.template !== backendElement.template) return backendElement;
+      return this.mergeArrayElement(ref, currentElement, backendElement);
+    });
+    const backendIds = new Set((backendElements || []).map((element) => element.id));
+    for (const currentElement of currentElements || []) {
+      if (!backendIds.has(currentElement.id)) merged.push(currentElement);
+    }
+    return merged;
+  }
+
+  mergeArrayElement(ref, currentElement, backendElement) {
+    const nextPath = [...(ref.elementPath || []), { arrayFieldId: ref.fieldId, elementId: backendElement.id }];
+    const currentItems = new Map((currentElement.items || []).map((item) => [item.id, item]));
+    return {
+      ...backendElement,
+      items: (backendElement.items || []).map((item) => {
+        if (item.type !== "field") return item;
+        const currentItem = currentItems.get(item.id);
+        if (!currentItem || currentItem.type !== "field" || currentItem.kind !== item.kind) return item;
+        const childRef = { blockId: ref.blockId, fieldId: item.id, elementPath: nextPath };
+        if (item.kind === "array") {
+          return {
+            ...item,
+            elements: this.hasDirtyArrayValues(childRef, currentItem.elements || [])
+              ? this.mergeArrayElements(childRef, currentItem.elements || [], item.elements || [])
+              : clone(item.elements || [])
+          };
+        }
+        if (!this.dirtyValues.has(valueKey(childRef))) return item;
+        return { ...item, value: clone(currentItem.value ?? null) };
+      })
+    };
+  }
+
+  syncArrayChildValues(ref, elements) {
+    for (const element of elements || []) {
+      const nextPath = [...(ref.elementPath || []), { arrayFieldId: ref.fieldId, elementId: element.id }];
+      for (const item of element.items || []) {
+        if (item.type !== "field") continue;
+        const childRef = { blockId: ref.blockId, fieldId: item.id, elementPath: nextPath };
+        if (item.kind === "array") {
+          this.values.set(valueKey(childRef), item.elements || []);
+          this.syncArrayChildValues(childRef, item.elements || []);
+        } else if (!this.dirtyValues.has(valueKey(childRef))) {
+          this.values.set(valueKey(childRef), clone(item.value ?? null));
+        }
+      }
+    }
   }
 
   addArrayElement(block, field, ref, templateName) {

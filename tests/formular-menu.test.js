@@ -491,6 +491,92 @@ test("copyable array fields copy current array values", async () => {
   ]);
 });
 
+test("regular block snapshots update clean array field values", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = (host) => ({
+    id: "live",
+    order: 1,
+    generation: 1,
+    form: false,
+    items: [{
+      type: "field",
+      id: "servers",
+      kind: "array",
+      label: "Servers",
+      elements: [{
+        id: "server-1",
+        template: "http",
+        items: [{ type: "field", id: "host", kind: "text", label: "Host", value: host }]
+      }]
+    }]
+  });
+
+  menu.feed({ type: "menu.snapshot", menuId: "settings", menuGeneration: 1, blocks: [block("localhost")] });
+  menu.feed({ type: "block.snapshot", menuId: "settings", menuGeneration: 1, blockGeneration: 2, block: block("generated.local") });
+
+  assert.equal(document.querySelector("input[type='text']").value, "generated.local");
+});
+
+test("regular block snapshots preserve dirty nested array field values", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = (host) => ({
+    id: "live",
+    order: 1,
+    generation: 1,
+    form: false,
+    items: [{
+      type: "field",
+      id: "servers",
+      kind: "array",
+      label: "Servers",
+      elements: [{
+        id: "server-1",
+        template: "http",
+        items: [{ type: "field", id: "host", kind: "text", label: "Host", value: host }]
+      }]
+    }]
+  });
+
+  menu.feed({ type: "menu.snapshot", menuId: "settings", menuGeneration: 1, blocks: [block("localhost")] });
+  const host = document.querySelector("input[type='text']");
+  host.value = "local-edit.local";
+  host.dispatchEvent(new window.Event("input", { bubbles: true }));
+  menu.feed({ type: "block.snapshot", menuId: "settings", menuGeneration: 1, blockGeneration: 2, block: block("backend.local") });
+
+  assert.equal(document.querySelector("input[type='text']").value, "local-edit.local");
+});
+
+test("regular block snapshots update clean fields inside locally added array elements", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = (dsn) => ({
+    id: "live",
+    order: 1,
+    generation: 1,
+    form: false,
+    items: [{
+      type: "field",
+      id: "servers",
+      kind: "array",
+      label: "Servers",
+      templates: [{ name: "database", items: [{ type: "field", id: "dsn", kind: "text", label: "DSN", value: "postgres://localhost/app" }] }],
+      elements: dsn ? [{
+        id: "local-1",
+        template: "database",
+        items: [{ type: "field", id: "dsn", kind: "text", label: "DSN", value: dsn }]
+      }] : []
+    }]
+  });
+
+  menu.feed({ type: "menu.snapshot", menuId: "settings", menuGeneration: 1, blocks: [block("")] });
+  document.querySelector(".formular-array-actions button").click();
+  menu.feed({ type: "block.snapshot", menuId: "settings", menuGeneration: 1, blockGeneration: 2, block: block("postgres://generated.local/app") });
+
+  assert.equal(document.querySelector("input[type='text']").value, "postgres://generated.local/app");
+});
+
 test("renders logs and patches appended log lines", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});
