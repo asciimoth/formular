@@ -126,6 +126,11 @@ function isTextLikeField(field) {
   return field.kind !== "range";
 }
 
+function localElementNumber(id) {
+  const match = String(id || "").match(/^local-(\d+)$/);
+  return match ? Number.parseInt(match[1], 10) : 0;
+}
+
 function renderMarkdownInline(input) {
   const root = document.createDocumentFragment();
   const parts = text(input).split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g);
@@ -215,7 +220,10 @@ export class FormularMenu {
         this.blocks.clear();
         this.values.clear();
         this.dirtyValues.clear();
-        for (const block of message.blocks || []) this.blocks.set(block.id, clone(block));
+        for (const block of message.blocks || []) {
+          this.trackLocalElementIDs(block);
+          this.blocks.set(block.id, clone(block));
+        }
         this.render();
       } else {
         this.applyMenuSnapshot(message.blocks || []);
@@ -224,6 +232,7 @@ export class FormularMenu {
       return true;
     }
     if (message.type === "block.snapshot" && message.block) {
+      this.trackLocalElementIDs(message.block);
       this.blocks.set(message.block.id, this.blockWithLocalCollapse(message.block));
       this.renderBlockById(message.block.id);
       this.requestBlockValidation(message.block);
@@ -291,6 +300,7 @@ export class FormularMenu {
     const nextIDs = new Set();
     for (const block of blocks) {
       nextIDs.add(block.id);
+      this.trackLocalElementIDs(block);
       this.blocks.set(block.id, this.blockWithLocalCollapse(block));
     }
     for (const blockId of [...this.blocks.keys()]) {
@@ -308,6 +318,18 @@ export class FormularMenu {
     const current = this.blocks.get(block.id);
     if (current) next.collapsed = Boolean(current.collapsed);
     return next;
+  }
+
+  trackLocalElementIDs(block) {
+    for (const item of block.items || []) this.trackLocalElementIDsInItem(item);
+  }
+
+  trackLocalElementIDsInItem(item) {
+    if (item.type !== "field" || item.kind !== "array") return;
+    for (const element of item.elements || []) {
+      this.localElementCounter = Math.max(this.localElementCounter, localElementNumber(element.id));
+      for (const child of element.items || []) this.trackLocalElementIDsInItem(child);
+    }
   }
 
   sortedBlocks() {

@@ -53,10 +53,12 @@ var serverValues = []serverState{{
 	},
 }}
 
+var menuState = formular.NewMenuSnapshotState()
+
 func main() {
 	done := make(chan struct{})
 	instanceID = nextInstanceID()
-	js.Global().Set("formularBackendSend", js.FuncOf(receive))
+	js.Global().Set("formularMiddlewareSend", js.FuncOf(middlewareReceive))
 	sendSnapshots()
 	go progressLoop(instanceID)
 	<-done
@@ -77,18 +79,27 @@ func currentInstance(id int) bool {
 	return current.Type() == js.TypeNumber && current.Int() == id
 }
 
-func receive(this js.Value, args []js.Value) any {
+func middlewareReceive(this js.Value, args []js.Value) any {
 	if len(args) == 0 {
 		return nil
 	}
+	raw := args[0].String()
 	var msg map[string]any
-	if err := json.Unmarshal([]byte(args[0].String()), &msg); err != nil {
+	if err := json.Unmarshal([]byte(raw), &msg); err != nil {
 		return nil
 	}
+	if msg["type"] == "demo.snapshot.request" {
+		sendCachedSnapshots()
+		return nil
+	}
+	_, _ = menuState.ApplyJSON([]byte(raw))
+	backendReceive(msg)
+	return nil
+}
+
+func backendReceive(msg map[string]any) {
 	menuID, _ := msg["menuId"].(string)
 	switch msg["type"] {
-	case "demo.snapshot.request":
-		sendSnapshots()
 	case formular.MessageFieldValidate:
 		validate(menuID, msg)
 	case formular.MessageAutocompleteRequest:
@@ -101,7 +112,6 @@ func receive(this js.Value, args []js.Value) any {
 		updateField(menuID, msg)
 		ack(menuID, "live", "Realtime update received")
 	}
-	return nil
 }
 
 func sendSnapshots() {
@@ -117,7 +127,21 @@ func send(v any) {
 	if err != nil {
 		return
 	}
+	_, _ = menuState.ApplyJSON(data)
 	js.Global().Call("formularFrontendDispatch", string(data))
+}
+
+func sendCachedSnapshots() {
+	if !currentInstance(instanceID) {
+		return
+	}
+	for _, snapshot := range menuState.ForceSnapshots() {
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			continue
+		}
+		js.Global().Call("formularFrontendDispatch", string(data))
+	}
 }
 
 func progressLoop(id int) {

@@ -579,6 +579,37 @@ test("regular block snapshots update clean fields inside locally added array ele
   assert.equal(document.querySelector("input[type='text']").value, "postgres://generated.local/app");
 });
 
+test("cached local array elements advance new local ids after force snapshots", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    force: true,
+    blocks: [{
+      id: "main",
+      order: 1,
+      generation: 1,
+      items: [{
+        type: "field",
+        id: "items",
+        kind: "array",
+        label: "Items",
+        templates: [{ name: "entry", items: [{ type: "field", id: "name", kind: "text", label: "Name", value: "" }] }],
+        elements: [{ id: "local-3", template: "entry", items: [{ type: "field", id: "name", kind: "text", label: "Name", value: "cached" }] }]
+      }]
+    }]
+  });
+
+  document.querySelector(".formular-array select").value = "entry";
+  document.querySelector(".formular-icon").click();
+
+  assert.match(document.body.textContent, /Items: local-4/);
+  assert.equal(outbox.at(-1).value.at(-1).id, "local-4");
+});
+
 test("renders logs and patches appended log lines", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

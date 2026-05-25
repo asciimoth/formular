@@ -113,6 +113,93 @@ test("frontend restart recreates menus without restarting backend", async ({ pag
   await expect(page.getByRole("button", { name: "Apply" }).first()).toBeEnabled();
 });
 
+test("middleware cached snapshots survive repeated frontend reloads and further edits", async ({ page }) => {
+  await page.goto("/demo/");
+  const state = page.locator("#backend-state");
+  await expect(state).toHaveText(/Go backend #\d+ running/);
+  const backendState = await state.textContent();
+
+  await page.getByLabel("Name *").fill("Cached Middleware User");
+  await page.getByLabel("Email *").fill("cached@example.com");
+  await expect(page.getByRole("button", { name: "Apply" }).first()).toBeEnabled();
+  await page.getByRole("button", { name: "Apply" }).first().click();
+  await expect(page.getByText("Form values accepted by Go WASM backend")).toBeVisible();
+
+  await page.getByLabel("Enabled").uncheck();
+  await page.locator("#right-menu").getByRole("radio", { name: "warn", exact: true }).check();
+  await page.getByLabel("Volume").fill("67");
+
+  await page.locator("#left-menu").getByRole("radio", { name: "error", exact: true }).check();
+  await page.locator("#left-menu").getByLabel("Message").fill("Cached middleware log");
+  await page.getByRole("button", { name: "Apply" }).nth(1).click();
+  await expect(page.getByText("Cached middleware log")).toBeVisible();
+
+  const array = page.locator("#right-menu .formular-array");
+  await array.locator("select").selectOption("database");
+  await array.getByRole("button", { name: "+" }).click();
+  const database = page.locator("#right-menu .formular-element").filter({ hasText: "Servers: local-1" });
+  await expect(database).toBeVisible();
+  await database.getByRole("radio", { name: "mysql", exact: true }).check();
+  await database.getByLabel("DSN").fill("mysql://cache.local/app");
+  await database.getByLabel("Pool size").fill("31");
+
+  let expectedVolume = "67";
+  let expectedStatus = "warn";
+  let queueAdded = false;
+  const statusText = {
+    ok: "Backend marked this field as OK",
+    warn: "Backend marked this field as a warning",
+    error: "Backend marked this field as an error"
+  };
+
+  for (const [index, nextStatus] of ["error", "ok", "warn"].entries()) {
+    await page.getByRole("button", { name: "Restart frontends" }).click();
+    await expect(state).toHaveText(backendState);
+
+    await expect(page.getByLabel("Name *")).toHaveValue("Cached Middleware User");
+    await expect(page.getByLabel("Email *")).toHaveValue("cached@example.com");
+    await expect(page.getByLabel("Enabled")).not.toBeChecked();
+    await expect(page.getByLabel("Volume")).toHaveValue(expectedVolume);
+    await expect(page.locator("#right-menu").getByRole("radio", { name: expectedStatus, exact: true })).toBeChecked();
+    await expect(page.getByText(statusText[expectedStatus])).toBeVisible();
+    await expect(page.getByText("Cached middleware log")).toBeVisible();
+
+    const cachedDatabase = page.locator("#right-menu .formular-element").filter({ hasText: "Servers: local-1" });
+    await expect(cachedDatabase.getByRole("radio", { name: "mysql", exact: true })).toBeChecked();
+    await expect(cachedDatabase.getByLabel("DSN")).toHaveValue("mysql://cache.local/app");
+    await expect(cachedDatabase.getByLabel("Pool size")).toHaveValue("31");
+
+    if (queueAdded) {
+      const cachedQueue = page.locator("#right-menu .formular-element").filter({ hasText: "Servers: local-2" });
+      await expect(cachedQueue.getByLabel("Subject")).toHaveValue("events.cached.reload");
+    }
+
+    expectedVolume = String(70 + index);
+    expectedStatus = nextStatus;
+    await page.getByLabel("Volume").fill(expectedVolume);
+    await page.locator("#right-menu").getByRole("radio", { name: expectedStatus, exact: true }).check();
+    await expect(page.getByText(statusText[expectedStatus])).toBeVisible();
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(page.getByText("Refresh button pressed")).toBeVisible();
+
+    if (!queueAdded) {
+      await page.locator("#right-menu .formular-array select").selectOption("queue");
+      await page.locator("#right-menu .formular-array").getByRole("button", { name: "+" }).click();
+      const queue = page.locator("#right-menu .formular-element").filter({ hasText: "Servers: local-2" });
+      await expect(queue).toBeVisible();
+      await queue.getByLabel("Subject").fill("events.cached.reload");
+      queueAdded = true;
+    }
+  }
+
+  await page.getByRole("button", { name: "Restart frontends" }).click();
+  await expect(state).toHaveText(backendState);
+  await expect(page.getByLabel("Volume")).toHaveValue(expectedVolume);
+  await expect(page.locator("#right-menu").getByRole("radio", { name: expectedStatus, exact: true })).toBeChecked();
+  await expect(page.getByText(statusText[expectedStatus])).toBeVisible();
+  await expect(page.locator("#right-menu .formular-element").filter({ hasText: "Servers: local-2" }).getByLabel("Subject")).toHaveValue("events.cached.reload");
+});
+
 test("backend restart resends snapshots without recreating frontends", async ({ page }) => {
   await page.goto("/demo/");
   const state = page.locator("#backend-state");

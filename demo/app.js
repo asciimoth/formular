@@ -15,8 +15,8 @@ function log(direction, message) {
 }
 
 function sendToBackend(message) {
-  log("frontend -> backend", message);
-  window.formularBackendSend?.(JSON.stringify(message));
+  log("frontend -> middleware", message);
+  window.formularMiddlewareSend?.(JSON.stringify(message));
 }
 
 function createFrontends({ requestSnapshot = true } = {}) {
@@ -29,7 +29,7 @@ function createFrontends({ requestSnapshot = true } = {}) {
 }
 
 function requestSnapshots() {
-  if (typeof window.formularBackendSend !== "function") return;
+  if (typeof window.formularMiddlewareSend !== "function") return;
   sendToBackend({ type: "demo.snapshot.request", menuId: "demo" });
 }
 
