@@ -891,10 +891,14 @@ export class FormularMenu {
   applyAutocompleteHints(message) {
     if (!this.focusedField || !sameField(this.focusedField, message.field)) return;
     const key = valueKey(message.field);
-    const input = [...this.root.querySelectorAll("[data-formular-field-key]")].find((node) => node.dataset.formularFieldKey === key);
+    const input = [...this.root.querySelectorAll("input[data-formular-field-key][list]")]
+      .find((node) => node.dataset.formularFieldKey === key);
     const list = input ? document.getElementById(input.getAttribute("list")) : null;
     if (!input || !list || input.value !== message.prefix) return;
-    list.replaceChildren(...(message.hints || []).filter((hint) => String(hint).startsWith(message.prefix)).map((hint) => {
+    list.replaceChildren(...(message.hints || []).filter((hint) => {
+      const value = String(hint);
+      return value.startsWith(message.prefix) && value !== message.prefix;
+    }).map((hint) => {
       const option = document.createElement("option");
       option.value = hint;
       return option;

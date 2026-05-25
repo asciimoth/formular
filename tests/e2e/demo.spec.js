@@ -30,6 +30,25 @@ test("validated text input keeps focus while backend statuses arrive", async ({ 
   await expect(email).toHaveValue("invalid@example.com");
 });
 
+test("left profile timezone field receives backend autocomplete hints", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const timezone = page.getByLabel("Timezone");
+  await timezone.fill("Europe/T");
+
+  await expect.poll(async () => timezone.evaluate((input) => {
+    const list = document.getElementById(input.getAttribute("list"));
+    return [...(list?.querySelectorAll("option") || [])].map((option) => option.value);
+  })).toContain("Europe/Tbilisi");
+
+  await timezone.fill("UTC");
+  await expect.poll(async () => timezone.evaluate((input) => {
+    const list = document.getElementById(input.getAttribute("list"));
+    return [...(list?.querySelectorAll("option") || [])].map((option) => option.value);
+  })).not.toContain("UTC");
+});
+
 test("left progress updates do not interrupt profile input", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

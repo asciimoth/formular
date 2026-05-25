@@ -107,6 +107,43 @@ test("applies field status updates", () => {
   assert.equal(document.querySelector("input[type='text']").disabled, true);
 });
 
+test("applies autocomplete hints to the focused datalist input", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "profile",
+      order: 1,
+      generation: 1,
+      form: true,
+      items: [
+        { type: "field", id: "timezone", kind: "text", label: "Timezone", value: "UTC", autocomplete: { enabled: true, tag: "timezone" } }
+      ]
+    }]
+  });
+
+  const input = document.querySelector("input[list]");
+  input.focus();
+  input.value = "Europe/T";
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+  menu.feed({
+    type: "autocomplete.hints",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 1,
+    field: { blockId: "profile", fieldId: "timezone" },
+    prefix: "Europe/T",
+    hints: ["Europe/T", "Europe/Tbilisi"]
+  });
+
+  const list = document.getElementById(input.getAttribute("list"));
+  assert.deepEqual([...list.querySelectorAll("option")].map((option) => option.value), ["Europe/Tbilisi"]);
+});
+
 test("non-forced backend updates preserve local collapse state", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

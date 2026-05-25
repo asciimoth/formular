@@ -20,6 +20,7 @@ type serverState struct {
 var profileValues = map[string]any{
 	"name":     "Ada",
 	"email":    "admin@example.com",
+	"timezone": "UTC",
 	"password": "",
 	"bio":      "Line one\nLine two",
 	"age":      37,
@@ -170,8 +171,9 @@ func validate(menuID string, msg map[string]any) {
 }
 
 func autocomplete(menuID string, msg map[string]any) {
+	field := fieldRef(msg)
 	prefix, _ := msg["prefix"].(string)
-	all := []string{"admin@example.com", "author@example.com", "billing@example.com", "support@example.com"}
+	all := autocompleteValues(field.FieldID)
 	hints := make([]string, 0, len(all))
 	for _, hint := range all {
 		if strings.HasPrefix(hint, prefix) {
@@ -180,10 +182,21 @@ func autocomplete(menuID string, msg map[string]any) {
 	}
 	send(formular.AutocompleteHintsMessage{
 		MessageBase: formular.MessageBase{Type: formular.MessageAutocompleteHints, MenuID: menuID, MenuGeneration: 1, BlockGeneration: 1},
-		Field:       fieldRef(msg),
+		Field:       field,
 		Prefix:      prefix,
 		Hints:       hints,
 	})
+}
+
+func autocompleteValues(fieldID string) []string {
+	switch fieldID {
+	case "email":
+		return []string{"admin@example.com", "author@example.com", "billing@example.com", "support@example.com"}
+	case "timezone":
+		return []string{"UTC", "Europe/Tbilisi", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "Asia/Tokyo"}
+	default:
+		return nil
+	}
 }
 
 func button(menuID string, msg map[string]any) {
@@ -393,6 +406,10 @@ func leftBlocks() []formular.Block {
 					f.Required = true
 					f.Validation = true
 					f.Autocomplete = &formular.Autocomplete{Enabled: true, Tag: "email"}
+				}),
+				field("timezone", formular.FieldText, "Timezone", profileValue("timezone", "UTC"), func(f *formular.Field) {
+					f.Placeholder = "IANA timezone"
+					f.Autocomplete = &formular.Autocomplete{Enabled: true, Tag: "timezone"}
 				}),
 				field("password", formular.FieldText, "Secret", profileValue("password", ""), func(f *formular.Field) { f.Secret = true }),
 				field("bio", formular.FieldText, "Bio", profileValue("bio", "Line one\nLine two"), func(f *formular.Field) { f.Multiline = true }),
