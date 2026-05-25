@@ -188,7 +188,7 @@ export class FormularMenu {
       return true;
     }
     if (message.type === "block.snapshot" && message.block) {
-      this.blocks.set(message.block.id, clone(message.block));
+      this.blocks.set(message.block.id, this.blockWithLocalCollapse(message.block));
       this.renderBlockById(message.block.id);
       this.requestBlockValidation(message.block);
       return true;
@@ -255,7 +255,7 @@ export class FormularMenu {
     const nextIDs = new Set();
     for (const block of blocks) {
       nextIDs.add(block.id);
-      this.blocks.set(block.id, clone(block));
+      this.blocks.set(block.id, this.blockWithLocalCollapse(block));
     }
     for (const blockId of [...this.blocks.keys()]) {
       if (!nextIDs.has(blockId)) {
@@ -265,6 +265,13 @@ export class FormularMenu {
       }
     }
     for (const block of this.sortedBlocks()) this.renderBlockById(block.id);
+  }
+
+  blockWithLocalCollapse(block) {
+    const next = clone(block);
+    const current = this.blocks.get(block.id);
+    if (current) next.collapsed = Boolean(current.collapsed);
+    return next;
   }
 
   sortedBlocks() {
@@ -313,6 +320,7 @@ export class FormularMenu {
 
   canPatchBlock(previous, next) {
     if (previous.id !== next.id || Boolean(previous.form) !== Boolean(next.form) || Boolean(previous.inactive) !== Boolean(next.inactive) || Boolean(previous.collapsible) !== Boolean(next.collapsible)) return false;
+    if (JSON.stringify(previous.copyable || null) !== JSON.stringify(next.copyable || null)) return false;
     const previousItems = previous.items || [];
     const nextItems = next.items || [];
     if (previousItems.length !== nextItems.length) return false;
@@ -423,7 +431,8 @@ export class FormularMenu {
     if (block.collapsible) {
       const toggle = this.button(collapsed ? "+" : "-", "Toggle block");
       toggle.addEventListener("click", () => {
-        block.collapsed = !block.collapsed;
+        const current = this.blocks.get(block.id);
+        if (current) current.collapsed = !Boolean(current.collapsed);
         this.render();
       });
       actions.prepend(toggle);
@@ -557,7 +566,7 @@ export class FormularMenu {
     if (item.help) button.title = item.help;
     button.addEventListener("click", () => this.send({
       type: "button.press",
-      ...this.base(block),
+      ...this.base(this.blocks.get(block.id) || block),
       blockId: block.id,
       elementPath: elementPath.length ? clone(elementPath) : undefined,
       buttonId: item.id
@@ -662,9 +671,10 @@ export class FormularMenu {
     if (field.min != null) input.min = String(field.min);
     if (field.max != null) input.max = String(field.max);
     input.addEventListener("input", () => {
-      const value = normalizeKindValue(field, input.value);
+      const currentField = this.findField(ref) || field;
+      const value = normalizeKindValue(currentField, input.value);
       this.commitField(block, field, ref, value);
-      if (field.autocomplete?.enabled) this.requestAutocomplete(block, field, ref, input.value);
+      if (currentField.autocomplete?.enabled) this.requestAutocomplete(block, currentField, ref, input.value);
     });
     if (field.autocomplete?.enabled) {
       const listId = `${this.prefix}-hints-${Math.random().toString(36).slice(2)}`;
@@ -754,7 +764,7 @@ export class FormularMenu {
     reset.textContent = "Reset";
     reset.disabled = block.inactive;
     reset.addEventListener("click", () => {
-      this.clearBlockValues(block);
+      this.clearBlockValues(this.blocks.get(block.id) || block);
       this.render();
     });
     const apply = document.createElement("button");
@@ -765,9 +775,9 @@ export class FormularMenu {
     apply.disabled = block.inactive || !this.canApply(block);
     apply.addEventListener("click", () => this.send({
       type: "form.apply",
-      ...this.base(block),
+      ...this.base(this.blocks.get(block.id) || block),
       blockId: block.id,
-      values: this.collectBlockValues(block)
+      values: this.collectBlockValues(this.blocks.get(block.id) || block)
     }));
     row.append(reset, apply);
     return row;
@@ -818,21 +828,24 @@ export class FormularMenu {
   }
 
   commitField(block, field, ref, value) {
-    this.setValue(block, field, ref, value);
-    field.value = value;
-    if (field.validate && field.kind !== "file") {
-      field.status = "unset";
-      field.statusText = "";
-      this.updateFieldStatusDOM(ref, field);
+    const currentBlock = this.blocks.get(ref.blockId) || block;
+    const currentField = this.findField(ref) || field;
+    this.setValue(currentBlock, currentField, ref, value);
+    currentField.value = value;
+    if (currentField.validate && currentField.kind !== "file") {
+      currentField.status = "unset";
+      currentField.statusText = "";
+      this.updateFieldStatusDOM(ref, currentField);
     }
-    if (field.validate && field.kind !== "file") this.send({ type: "field.validate", ...this.base(block), field: ref, value });
-    if (!block.form) this.send({ type: "field.update", ...this.base(block), field: ref, value });
-    if (block.form) this.updateFormActions(block);
+    if (currentField.validate && currentField.kind !== "file") this.send({ type: "field.validate", ...this.base(currentBlock), field: ref, value });
+    if (!currentBlock.form) this.send({ type: "field.update", ...this.base(currentBlock), field: ref, value });
+    if (currentBlock.form) this.updateFormActions(currentBlock);
   }
 
   readFile(block, field, ref, file) {
     if (!file) return;
-    const maxBytes = field.maxBytes || 4098;
+    const currentField = this.findField(ref) || field;
+    const maxBytes = currentField.maxBytes || 4098;
     if (file.size > maxBytes) {
       this.applyLocalStatus(ref, "error", `File is larger than ${maxBytes} bytes`);
       return;
@@ -846,8 +859,9 @@ export class FormularMenu {
   }
 
   requestAutocomplete(block, field, ref, prefix) {
+    const currentBlock = this.blocks.get(ref.blockId) || block;
     this.focusedField = ref;
-    this.send({ type: "autocomplete.request", ...this.base(block), field: ref, prefix });
+    this.send({ type: "autocomplete.request", ...this.base(currentBlock), field: ref, prefix });
   }
 
   requestInitialValidation() {
@@ -963,9 +977,11 @@ export class FormularMenu {
   }
 
   addArrayElement(block, field, ref, templateName) {
-    const template = (field.templates || []).find((item) => item.name === templateName);
+    const currentBlock = this.blocks.get(ref.blockId) || block;
+    const currentField = this.findField(ref) || field;
+    const template = (currentField.templates || []).find((item) => item.name === templateName);
     if (!template) return;
-    const elements = this.getArrayElements(ref, field);
+    const elements = this.getArrayElements(ref, currentField);
     const element = {
       id: `local-${++this.localElementCounter}`,
       template: template.name,
@@ -976,19 +992,21 @@ export class FormularMenu {
     this.values.set(key, elements);
     this.dirtyValues.add(key);
     const value = this.arrayWireValues(elements);
-    if (field.validate) this.send({ type: "field.validate", ...this.base(block), field: ref, value });
-    if (!block.form) this.send({ type: "field.update", ...this.base(block), field: ref, value });
+    if (currentField.validate) this.send({ type: "field.validate", ...this.base(currentBlock), field: ref, value });
+    if (!currentBlock.form) this.send({ type: "field.update", ...this.base(currentBlock), field: ref, value });
     this.render();
   }
 
   removeArrayElement(block, field, ref, elementId) {
-    const elements = this.getArrayElements(ref, field).filter((element) => element.id !== elementId);
+    const currentBlock = this.blocks.get(ref.blockId) || block;
+    const currentField = this.findField(ref) || field;
+    const elements = this.getArrayElements(ref, currentField).filter((element) => element.id !== elementId);
     const key = valueKey(ref);
     this.values.set(key, elements);
     this.dirtyValues.add(key);
     const value = this.arrayWireValues(elements);
-    if (field.validate) this.send({ type: "field.validate", ...this.base(block), field: ref, value });
-    if (!block.form) this.send({ type: "field.update", ...this.base(block), field: ref, value });
+    if (currentField.validate) this.send({ type: "field.validate", ...this.base(currentBlock), field: ref, value });
+    if (!currentBlock.form) this.send({ type: "field.update", ...this.base(currentBlock), field: ref, value });
     this.render();
   }
 

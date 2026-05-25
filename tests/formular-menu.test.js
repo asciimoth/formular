@@ -107,6 +107,85 @@ test("applies field status updates", () => {
   assert.equal(document.querySelector("input[type='text']").disabled, true);
 });
 
+test("non-forced backend updates preserve local collapse state", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = (collapsed, text = "Live") => ({
+    id: "main",
+    order: 1,
+    generation: 1,
+    form: false,
+    collapsible: true,
+    collapsed,
+    items: [{ type: "label", id: "status", text }]
+  });
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [block(false)]
+  });
+  document.querySelector("button[title='Toggle block']").click();
+  assert.equal(document.querySelector("button[title='Toggle block']").textContent, "+");
+  assert.doesNotMatch(document.body.textContent, /Live/);
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 2,
+    blocks: [block(false, "Updated")]
+  });
+  assert.equal(document.querySelector("button[title='Toggle block']").textContent, "+");
+  assert.doesNotMatch(document.body.textContent, /Updated/);
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 2,
+    blockGeneration: 2,
+    block: block(false, "Patched")
+  });
+  assert.equal(document.querySelector("button[title='Toggle block']").textContent, "+");
+  assert.doesNotMatch(document.body.textContent, /Patched/);
+
+  document.querySelector("button[title='Toggle block']").click();
+  assert.equal(document.querySelector("button[title='Toggle block']").textContent, "-");
+  assert.match(document.body.textContent, /Patched/);
+});
+
+test("forced menu snapshots reset local collapse state", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const block = {
+    id: "main",
+    order: 1,
+    generation: 1,
+    form: false,
+    collapsible: true,
+    collapsed: false,
+    items: [{ type: "label", id: "status", text: "Live" }]
+  };
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [block]
+  });
+  document.querySelector("button[title='Toggle block']").click();
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 2,
+    force: true,
+    blocks: [block]
+  });
+  assert.equal(document.querySelector("button[title='Toggle block']").textContent, "-");
+  assert.match(document.body.textContent, /Live/);
+});
+
 test("block snapshots patch changed progress without interrupting active input", () => {
   setupDom();
   const outside = document.createElement("button");
@@ -156,6 +235,88 @@ test("block snapshots patch changed progress without interrupting active input",
   assert.equal(document.activeElement, outside);
   assert.equal(input.value, "Ada Lovelace");
   assert.match(document.body.textContent, /20%/);
+});
+
+test("controls use current block state after in-place backend patches", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  const block = (generation, label = "Run") => ({
+    id: "main",
+    order: 1,
+    generation,
+    form: false,
+    items: [
+      { type: "field", id: "name", kind: "text", label: "Name", value: "Ada", validate: true },
+      { type: "button", id: "run", label }
+    ]
+  });
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [block(1)]
+  });
+  outbox.length = 0;
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 2,
+    block: block(2, "Run now")
+  });
+  outbox.length = 0;
+  document.querySelector("input[type='text']").value = "Grace";
+  document.querySelector("input[type='text']").dispatchEvent(new window.Event("input", { bubbles: true }));
+  [...document.querySelectorAll("button")].find((button) => button.textContent === "Run now").click();
+
+  assert.equal(outbox[0].type, "field.validate");
+  assert.equal(outbox[0].blockGeneration, 2);
+  assert.equal(outbox[1].type, "field.update");
+  assert.equal(outbox[1].blockGeneration, 2);
+  assert.equal(outbox[2].type, "button.press");
+  assert.equal(outbox[2].blockGeneration, 2);
+});
+
+test("form actions use current block state after in-place backend patches", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  const block = (generation, age) => ({
+    id: "form",
+    order: 1,
+    generation,
+    form: true,
+    items: [
+      { type: "field", id: "email", kind: "text", label: "Email", value: "a@example.com", required: true, validate: true, status: "ok" },
+      { type: "field", id: "age", kind: "int", label: "Age", value: age }
+    ]
+  });
+
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [block(1, 41)]
+  });
+  outbox.length = 0;
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 2,
+    block: block(2, 42)
+  });
+  outbox.length = 0;
+  [...document.querySelectorAll("button")].find((button) => button.textContent === "Apply").click();
+
+  assert.equal(outbox.length, 1);
+  assert.equal(outbox[0].type, "form.apply");
+  assert.equal(outbox[0].blockGeneration, 2);
+  assert.deepEqual(outbox[0].values, { email: "a@example.com", age: 42 });
 });
 
 test("renders logs and patches appended log lines", () => {
