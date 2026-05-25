@@ -33,6 +33,7 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 							Autocomplete:  &Autocomplete{Enabled: true, Tag: "email"},
 							AllowedValues: []any{map[string]any{"name": "user@example.com"}},
 							Min:           &min,
+							Copyable:      &Copyable{Text: "field copy"},
 							Templates: []ArrayTemplate{
 								{
 									Name: "credential",
@@ -75,6 +76,7 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 	copied.Blocks[0].Items[2].Field.Min = nil
 	copied.Blocks[0].Items[2].Field.Value.(map[string]any)["nested"].([]any)[0] = "changed"
 	copied.Blocks[0].Items[2].Field.AllowedValues[0].(map[string]any)["name"] = "changed"
+	copied.Blocks[0].Items[2].Field.Copyable.Text = "changed"
 	copied.Blocks[0].Items[2].Field.Templates[0].Items[0].Label = "changed"
 	copied.Blocks[0].Items[2].Field.Elements[0].Copyable.Text = "changed"
 	copied.Blocks[0].Items[2].Field.Elements[0].Items[0].Field.Readonly = false
@@ -99,6 +101,9 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 	}
 	if got := original.Blocks[0].Items[2].Field.AllowedValues[0].(map[string]any)["name"]; got != "user@example.com" {
 		t.Fatal("allowed values were shared")
+	}
+	if original.Blocks[0].Items[2].Field.Copyable.Text != "field copy" {
+		t.Fatal("field copyable was shared")
 	}
 	if original.Blocks[0].Items[2].Field.Templates[0].Items[0].Label != "Rotate" {
 		t.Fatal("array template items were shared")

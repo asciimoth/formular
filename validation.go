@@ -408,6 +408,9 @@ func (v *validator) field(path string, field Field, inArrayElement bool) {
 	if field.MaxBytes != nil && *field.MaxBytes == 0 {
 		v.add(path+".maxBytes", "must be greater than zero")
 	}
+	if field.Copyable != nil {
+		v.copyable(path+".copyable", *field.Copyable)
+	}
 	for i, accept := range field.Accept {
 		if accept == "" {
 			v.add(indexPath(path+".accept", i), "must not be empty")

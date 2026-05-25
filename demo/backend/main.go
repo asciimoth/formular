@@ -485,10 +485,27 @@ func rightBlocks() []formular.Block {
 				field("servers", formular.FieldArray, "Servers", nil, func(f *formular.Field) {
 					f.Templates = templates
 					f.Elements = serverElements()
+					f.Copyable = &formular.Copyable{Text: serversCopyText()}
 				}),
 			},
 		},
 	}
+}
+
+func serversCopyText() string {
+	values := make([]formular.ArrayElementValue, 0, len(serverValues))
+	for _, server := range serverValues {
+		values = append(values, formular.ArrayElementValue{
+			ID:       server.ID,
+			Template: server.Template,
+			Values:   server.Values,
+		})
+	}
+	data, err := json.MarshalIndent(values, "", "  ")
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }
 
 func serverTemplates() []formular.ArrayTemplate {

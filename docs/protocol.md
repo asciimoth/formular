@@ -120,6 +120,7 @@ Common field properties:
 - `readonly`: frontend displays the value but prevents editing.
 - `required`: frontend prevents form apply while empty.
 - `validate`: frontend sends `field.validate` on changes.
+- `copyable`: optional clipboard text for an explicit frontend copy action.
 - `status`: backend state, one of `unset`, `ok`, `warn`, `error`.
 - `statusText`: optional explanation.
 
@@ -218,7 +219,7 @@ Array field values are sent as arrays of objects:
 ```
 
 ## Copyable Objects
-Blocks and array elements may include:
+Blocks, fields, and array elements may include:
 
 ```json
 { "copyable": { "text": "value for clipboard" } }

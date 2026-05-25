@@ -110,6 +110,7 @@ export interface FieldItem extends ItemBase {
   accept?: string[];
   templates?: ArrayTemplate[];
   elements?: ArrayElement[];
+  copyable?: Copyable;
 }
 
 export type Item = HeaderItem | LabelItem | ProgressbarItem | LogsItem | ButtonItem | FieldItem;

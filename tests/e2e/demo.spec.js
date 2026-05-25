@@ -153,15 +153,25 @@ test("backend validation demo updates field status from radio changes", async ({
 
 test("array templates can add database element and survive frontend restart", async ({ page }) => {
   await page.goto("/demo/");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const copy = page.locator("#right-menu .formular-array .formular-array-actions").getByRole("button", { name: "Copy" });
+  await expect(copy).toBeVisible();
+  await copy.click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("\"server-1\"");
 
   await page.locator(".formular-array select").selectOption("database");
   await page.getByRole("button", { name: "+" }).click();
   await expect(page.getByText(/Servers: local-/)).toBeVisible();
+  await copy.click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("\"local-1\"");
 
   await page.getByRole("radio", { name: "mysql", exact: true }).check();
   await page.getByLabel("DSN").fill("mysql://localhost/demo");
   await page.getByLabel("Pool size").fill("24");
+  await copy.click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("mysql://localhost/demo");
   await page.getByRole("button", { name: "Restart frontends" }).click();
 
   await expect(page.getByText(/Servers: local-/)).toBeVisible();

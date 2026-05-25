@@ -220,7 +220,8 @@
         "elements": {
           "type": "array",
           "items": { "$ref": "#/$defs/arrayElement" }
-        }
+        },
+        "copyable": { "$ref": "#/$defs/copyable" }
       }
     },
     "item": {

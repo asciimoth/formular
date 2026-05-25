@@ -393,6 +393,68 @@ test("form reset restores backend defaults after local edits", () => {
   assert.equal(outbox.at(-1).value, "User submitted log line");
 });
 
+test("copyable array fields copy current array values", async () => {
+  setupDom();
+  let copied = "";
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async (value) => { copied = value; } }
+  });
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "live",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [{
+        type: "field",
+        id: "servers",
+        kind: "array",
+        label: "Servers",
+        copyable: { text: "[server snapshot]" },
+        templates: [
+          { name: "http", items: [{ type: "field", id: "host", kind: "text", label: "Host", value: "new.local" }] },
+          { name: "database", items: [{ type: "field", id: "dsn", kind: "text", label: "DSN", value: "postgres://localhost/app" }] }
+        ],
+        elements: [{
+          id: "server-1",
+          template: "http",
+          items: [{ type: "field", id: "host", kind: "text", label: "Host", value: "localhost" }]
+        }]
+      }]
+    }]
+  });
+
+  [...document.querySelectorAll(".formular-array-actions button")]
+    .find((button) => button.textContent === "Copy")
+    .click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(JSON.parse(copied), [{
+    id: "server-1",
+    template: "http",
+    values: { host: "localhost" }
+  }]);
+
+  document.querySelector(".formular-array-actions select").value = "database";
+  [...document.querySelectorAll(".formular-array-actions button")]
+    .find((button) => button.textContent === "+")
+    .click();
+  [...document.querySelectorAll(".formular-array-actions button")]
+    .find((button) => button.textContent === "Copy")
+    .click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(JSON.parse(copied), [
+    { id: "server-1", template: "http", values: { host: "localhost" } },
+    { id: "local-1", template: "database", values: { dsn: "postgres://localhost/app" } }
+  ]);
+});
+
 test("renders logs and patches appended log lines", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

@@ -367,6 +367,8 @@ type Field struct {
 	Templates []ArrayTemplate `json:"templates,omitempty"`
 	// Elements is the current array field element snapshot.
 	Elements []ArrayElement `json:"elements,omitempty"`
+	// Copyable declares optional text for a frontend copy action.
+	Copyable *Copyable `json:"copyable,omitempty"`
 }
 
 // Copy returns a deep copy of f.
@@ -381,6 +383,7 @@ func (f Field) Copy() Field {
 	f.Accept = copySlice(f.Accept)
 	f.Templates = copyArrayTemplates(f.Templates)
 	f.Elements = copyArrayElements(f.Elements)
+	f.Copyable = copyCopyablePtr(f.Copyable)
 	return f
 }
 

@@ -705,6 +705,7 @@ export class FormularMenu {
     label.textContent = field.label || field.id;
     const actions = document.createElement("span");
     actions.className = css(this.prefix, "array-actions");
+    if (field.copyable) actions.append(this.copyButton(() => this.arrayCopyText(ref, field)));
     const templateSelect = document.createElement("select");
     templateSelect.className = css(this.prefix, "select");
     templateSelect.disabled = disabled || field.readonly || !(field.templates || []).length;
@@ -796,14 +797,21 @@ export class FormularMenu {
 
   copyButton(copyText) {
     const button = this.button("Copy", "Copy");
+    button.className = css(this.prefix, "button");
     button.addEventListener("click", async () => {
       try {
-        await navigator.clipboard?.writeText(copyText || "");
+        const text = typeof copyText === "function" ? copyText() : copyText;
+        await navigator.clipboard?.writeText(text || "");
       } catch {
         this.send({ type: "clipboard.copy.failed", menuId: this.menuId });
       }
     });
     return button;
+  }
+
+  arrayCopyText(ref, field) {
+    const currentField = this.findField(ref) || field;
+    return JSON.stringify(this.arrayWireValues(this.getArrayElements(ref, currentField)), null, 2);
   }
 
   statusNode(status, statusText) {
