@@ -48,6 +48,12 @@ const DEFAULT_THEME = `
 .formular-help{color:#a6adc8;font-size:.86rem}
 .formular-control,.formular-select,.formular-textarea{background:#11111b;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font:inherit;min-height:34px;padding:6px 8px;width:100%}
 .formular-control:focus,.formular-select:focus,.formular-textarea:focus{border-color:#89b4fa;outline:2px solid rgba(137,180,250,.25)}
+.formular-control[data-status="ok"],.formular-textarea[data-status="ok"]{border-color:#a6e3a1}
+.formular-control[data-status="warn"],.formular-textarea[data-status="warn"]{border-color:#f9e2af}
+.formular-control[data-status="error"],.formular-textarea[data-status="error"]{border-color:#f38ba8}
+.formular-control[data-status="ok"]:focus,.formular-textarea[data-status="ok"]:focus{outline-color:rgba(166,227,161,.3)}
+.formular-control[data-status="warn"]:focus,.formular-textarea[data-status="warn"]:focus{outline-color:rgba(249,226,175,.32)}
+.formular-control[data-status="error"]:focus,.formular-textarea[data-status="error"]:focus{outline-color:rgba(243,139,168,.32)}
 .formular-textarea{min-height:88px;resize:vertical}
 .formular-radio-group{display:flex;flex-wrap:wrap;gap:10px}
 .formular-radio{align-items:center;display:inline-flex;gap:5px}
@@ -109,6 +115,15 @@ function normalizeKindValue(field, raw) {
   }
   if (field.kind === "checkbox") return Boolean(raw);
   return raw;
+}
+
+function setFieldControlStatus(control, status) {
+  if (status) control.dataset.status = status;
+  else delete control.dataset.status;
+}
+
+function isTextLikeField(field) {
+  return field.kind !== "range";
 }
 
 function renderMarkdownInline(input) {
@@ -691,6 +706,10 @@ export class FormularMenu {
     }
     input.value = current == null ? "" : String(current);
     input.disabled = readonly;
+    if (isTextLikeField(field)) {
+      input.dataset.formularTextLike = "true";
+      setFieldControlStatus(input, field.status);
+    }
     if (field.placeholder) input.placeholder = field.placeholder;
     if (field.min != null) input.min = String(field.min);
     if (field.max != null) input.max = String(field.max);
@@ -982,6 +1001,9 @@ export class FormularMenu {
       for (const control of node.querySelectorAll("input, select, textarea")) {
         control.disabled = Boolean(field.readonly);
       }
+    }
+    for (const control of node.querySelectorAll("[data-formular-text-like='true']")) {
+      setFieldControlStatus(control, field.status);
     }
   }
 

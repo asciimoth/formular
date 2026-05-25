@@ -60,6 +60,8 @@ new FormularMenu(root, "settings", send, {
 The renderer emits stable classes such as `PREFIX-root`, `PREFIX-block`,
 `PREFIX-field`, `PREFIX-control`, `PREFIX-progressbar`, `PREFIX-logs`,
 `PREFIX-button`, and `PREFIX-status`.
+Text-like `PREFIX-control` and `PREFIX-textarea` fields also receive a
+`data-status` attribute when the backend supplies a field status.
 
 ## Message behavior
 

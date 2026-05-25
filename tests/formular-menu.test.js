@@ -119,6 +119,7 @@ test("form blocks apply collected values only when valid", () => {
   outbox.length = 0;
 
   const apply = [...document.querySelectorAll("button")].find((button) => button.textContent === "Apply");
+  assert.equal(document.querySelector("input[type='text']").dataset.status, "ok");
   assert.equal(apply.disabled, false);
   apply.click();
 
@@ -140,6 +141,7 @@ test("applies field status updates", () => {
   });
 
   assert.match(document.body.textContent, /Bad value/);
+  assert.equal(document.querySelector("input[type='text']").dataset.status, "error");
   assert.equal(document.querySelector("input[type='text']").disabled, true);
 });
 
