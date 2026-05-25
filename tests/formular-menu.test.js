@@ -319,6 +319,43 @@ test("form actions use current block state after in-place backend patches", () =
   assert.deepEqual(outbox[0].values, { email: "a@example.com", age: 42 });
 });
 
+test("form reset restores backend defaults after local edits", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "left", (message) => outbox.push(message));
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "left",
+    menuGeneration: 1,
+    blocks: [{
+      id: "log-submit",
+      order: 1,
+      generation: 1,
+      form: true,
+      items: [
+        { type: "field", id: "level", kind: "radio", label: "Level", value: "info", allowedValues: ["trace", "debug", "info", "warn", "error", "panic"] },
+        { type: "field", id: "message", kind: "text", label: "Message", value: "User submitted log line", required: true, validate: true }
+      ]
+    }]
+  });
+  outbox.length = 0;
+
+  const message = document.querySelector("input[type='text']");
+  message.value = "Changed message";
+  message.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const error = [...document.querySelectorAll("input[type='radio']")].find((radio) => radio.value === JSON.stringify("error"));
+  error.checked = true;
+  error.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+  [...document.querySelectorAll("button")].find((button) => button.textContent === "Reset").click();
+
+  assert.equal(document.querySelector("input[type='text']").value, "User submitted log line");
+  const checked = [...document.querySelectorAll("input[type='radio']")].find((radio) => radio.checked);
+  assert.equal(checked.value, JSON.stringify("info"));
+  assert.equal(outbox.at(-1).type, "field.validate");
+  assert.equal(outbox.at(-1).value, "User submitted log line");
+});
+
 test("renders logs and patches appended log lines", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

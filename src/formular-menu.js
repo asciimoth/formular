@@ -764,8 +764,10 @@ export class FormularMenu {
     reset.textContent = "Reset";
     reset.disabled = block.inactive;
     reset.addEventListener("click", () => {
-      this.clearBlockValues(this.blocks.get(block.id) || block);
+      const currentBlock = this.blocks.get(block.id) || block;
+      this.clearBlockValues(currentBlock);
       this.render();
+      this.requestBlockValidation(currentBlock);
     });
     const apply = document.createElement("button");
     apply.type = "button";
@@ -831,7 +833,6 @@ export class FormularMenu {
     const currentBlock = this.blocks.get(ref.blockId) || block;
     const currentField = this.findField(ref) || field;
     this.setValue(currentBlock, currentField, ref, value);
-    currentField.value = value;
     if (currentField.validate && currentField.kind !== "file") {
       currentField.status = "unset";
       currentField.statusText = "";
