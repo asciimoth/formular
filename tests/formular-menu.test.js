@@ -61,6 +61,42 @@ test("renders a menu snapshot and sends field messages", () => {
   assert.equal(outbox[1].blockGeneration, 3);
 });
 
+test("renders visible help markers for item help", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "header", id: "title", text: "Settings", help: "Section help" },
+        { type: "label", id: "intro", text: "Intro", help: "Label help" },
+        { type: "progressbar", id: "sync", label: "Sync", progress: 10, help: "Progress help" },
+        { type: "logs", id: "events", label: "Events", logs: [], help: "Logs help" },
+        { type: "button", id: "run", label: "Run", help: "Button help" },
+        { type: "field", id: "name", kind: "text", label: "Name", value: "Ada", help: "Field help" }
+      ]
+    }]
+  });
+
+  const markers = [...document.querySelectorAll(".formular-help-marker")];
+  assert.equal(markers.length, 6);
+  assert.deepEqual(markers.map((marker) => marker.title), [
+    "Section help",
+    "Label help",
+    "Progress help",
+    "Logs help",
+    "Button help",
+    "Field help"
+  ]);
+  assert.match(document.body.textContent, /Field help/);
+});
+
 test("form blocks apply collected values only when valid", () => {
   setupDom();
   const outbox = [];

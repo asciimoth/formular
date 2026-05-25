@@ -20,6 +20,8 @@ const DEFAULT_THEME = `
 .formular-label{color:#cdd6f4}
 .formular-label pre{background:#11111b;border:1px solid #313244;border-radius:6px;margin:0;overflow:auto;padding:10px}
 .formular-label code,.formular-field-code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.formular-help-marker{align-items:center;background:#313244;border:1px solid #45475a;border-radius:50%;color:#89b4fa;display:inline-flex;font-size:.75rem;font-weight:800;height:18px;justify-content:center;line-height:1;margin-left:6px;vertical-align:middle;width:18px}
+.formular-help-marker:focus{outline:2px solid rgba(137,180,250,.45);outline-offset:2px}
 .formular-progressbar{display:flex;flex-direction:column;gap:5px}
 .formular-progressbar-row{align-items:center;display:flex;gap:10px}
 .formular-progressbar-label{color:#bac2de;font-weight:650}
@@ -143,6 +145,25 @@ function renderMarkdownInline(input) {
     root.append(document.createTextNode(part));
   }
   return root;
+}
+
+function helpMarker(prefix, help, { decorative = false } = {}) {
+  const marker = document.createElement("span");
+  marker.className = css(prefix, "help-marker");
+  marker.textContent = "?";
+  marker.title = text(help);
+  if (decorative) {
+    marker.setAttribute("aria-hidden", "true");
+  } else {
+    marker.tabIndex = 0;
+    marker.setAttribute("aria-label", "Help");
+  }
+  return marker;
+}
+
+function setTextWithHelp(node, value, prefix, help, options) {
+  node.replaceChildren(document.createTextNode(text(value)));
+  if (help) node.append(helpMarker(prefix, help, options));
 }
 
 export class FormularMenu {
@@ -335,7 +356,7 @@ export class FormularMenu {
 
   patchItem(node, item) {
     if (item.type === "header") {
-      node.textContent = item.text || "";
+      setTextWithHelp(node, item.text || "", this.prefix, item.help);
       node.title = item.help || "";
       return true;
     }
@@ -356,7 +377,7 @@ export class FormularMenu {
       return true;
     }
     if (item.type === "button") {
-      node.textContent = item.label || item.id;
+      setTextWithHelp(node, item.label || item.id, this.prefix, item.help, { decorative: true });
       node.disabled = Boolean(item.inactive);
       node.title = item.help || "";
       return true;
@@ -375,13 +396,14 @@ export class FormularMenu {
     const ref = { blockId: node.closest("[data-block-id]")?.dataset.blockId || "", fieldId: field.id };
     const label = node.querySelector(`.${css(this.prefix, "field-label")}`);
     if (label) {
-      label.textContent = field.label || field.id;
+      label.replaceChildren(document.createTextNode(field.label || field.id));
       if (field.required) {
         const required = document.createElement("span");
         required.className = css(this.prefix, "required");
         required.textContent = " *";
         label.append(required);
       }
+      if (field.help) label.append(helpMarker(this.prefix, field.help));
     }
     const help = node.querySelector(`.${css(this.prefix, "help")}`);
     if (help) help.textContent = field.help || "";
@@ -454,7 +476,7 @@ export class FormularMenu {
     if (item.type === "header") {
       node = document.createElement("div");
       node.className = css(this.prefix, "header");
-      node.textContent = item.text || "";
+      setTextWithHelp(node, item.text || "", this.prefix, item.help);
       if (item.help) node.title = item.help;
       return this.markItemNode(node, item);
     }
@@ -489,6 +511,7 @@ export class FormularMenu {
     } else {
       node.textContent = item.text || "";
     }
+    if (item.help) node.append(helpMarker(this.prefix, item.help));
     return node;
   }
 
@@ -500,7 +523,7 @@ export class FormularMenu {
     row.className = css(this.prefix, "progressbar-row");
     const label = document.createElement("span");
     label.className = css(this.prefix, "progressbar-label");
-    label.textContent = item.label || item.id;
+    setTextWithHelp(label, item.label || item.id, this.prefix, item.help);
     const value = document.createElement("span");
     value.className = css(this.prefix, "progressbar-value");
     const meter = document.createElement("progress");
@@ -517,7 +540,7 @@ export class FormularMenu {
     const label = node.querySelector(`.${css(this.prefix, "progressbar-label")}`);
     const value = node.querySelector(`.${css(this.prefix, "progressbar-value")}`);
     const meter = node.querySelector(`.${css(this.prefix, "progressbar-meter")}`);
-    if (label) label.textContent = item.label || item.id;
+    if (label) setTextWithHelp(label, item.label || item.id, this.prefix, item.help);
     if (value) value.textContent = `${progress}%`;
     if (meter) {
       meter.value = progress;
@@ -541,7 +564,7 @@ export class FormularMenu {
   updateLogsDOM(node, item) {
     const label = node.querySelector(`.${css(this.prefix, "logs-label")}`);
     const list = node.querySelector(`.${css(this.prefix, "logs-list")}`);
-    if (label) label.textContent = item.label || item.id;
+    if (label) setTextWithHelp(label, item.label || item.id, this.prefix, item.help);
     if (!list) return;
     list.replaceChildren(...(item.logs || []).map((line) => {
       const row = document.createElement("div");
@@ -561,7 +584,7 @@ export class FormularMenu {
     const button = document.createElement("button");
     button.type = "button";
     button.className = css(this.prefix, "button");
-    button.textContent = item.label || item.id;
+    setTextWithHelp(button, item.label || item.id, this.prefix, item.help, { decorative: true });
     button.disabled = Boolean(disabled || item.inactive);
     if (item.help) button.title = item.help;
     button.addEventListener("click", () => this.send({
@@ -584,13 +607,14 @@ export class FormularMenu {
     wrapper.dataset.formularFieldKey = valueKey(ref);
     const label = document.createElement("span");
     label.className = css(this.prefix, "field-label");
-    label.textContent = field.label || field.id;
+    label.append(document.createTextNode(field.label || field.id));
     if (field.required) {
       const required = document.createElement("span");
       required.className = css(this.prefix, "required");
       required.textContent = " *";
       label.append(required);
     }
+    if (field.help) label.append(helpMarker(this.prefix, field.help));
     const control = this.fieldControl(block, field, ref, current, disabled);
     wrapper.append(label, control);
     if (field.help) {
@@ -702,7 +726,7 @@ export class FormularMenu {
     header.className = css(this.prefix, "field-row");
     const label = document.createElement("span");
     label.className = css(this.prefix, "field-label");
-    label.textContent = field.label || field.id;
+    setTextWithHelp(label, field.label || field.id, this.prefix, field.help);
     const actions = document.createElement("span");
     actions.className = css(this.prefix, "array-actions");
     if (field.copyable) actions.append(this.copyButton(() => this.arrayCopyText(ref, field)));

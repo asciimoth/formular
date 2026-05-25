@@ -393,39 +393,39 @@ func leftBlocks() []formular.Block {
 			Collapsible: true,
 			Copyable:    &formular.Copyable{Text: "profile block"},
 			Items: []formular.Item{
-				{Type: formular.ItemHeader, ID: "title", Text: "Profile form"},
-				{Type: formular.ItemLabel, ID: "intro", Text: "Markdown **label** with `code` and [link](https://example.com).", Format: formular.TextMarkdown},
-				{Type: formular.ItemProgressbar, ID: "sync-progress", Label: "Background sync", Progress: &progressValue},
-				field("name", formular.FieldText, "Name", profileValue("name", "Ada"), func(f *formular.Field) {
+				{Type: formular.ItemHeader, ID: "title", Text: "Profile form", Help: "A form block submits all profile fields together with Apply."},
+				{Type: formular.ItemLabel, ID: "intro", Text: "Markdown **label** with `code` and [link](https://example.com).", Format: formular.TextMarkdown, Help: "Labels can render plain text, markdown, or code while keeping backend text sanitized."},
+				{Type: formular.ItemProgressbar, ID: "sync-progress", Label: "Background sync", Progress: &progressValue, Help: "The Go backend updates this progress bar once per second."},
+				withHelp(field("name", formular.FieldText, "Name", profileValue("name", "Ada"), func(f *formular.Field) {
 					f.Required = true
 					f.Validation = true
 					f.Placeholder = "Display name"
-				}),
-				field("email", formular.FieldText, "Email", profileValue("email", "admin@example.com"), func(f *formular.Field) {
+				}), "Required text field with backend validation."),
+				withHelp(field("email", formular.FieldText, "Email", profileValue("email", "admin@example.com"), func(f *formular.Field) {
 					f.Subtype = "email"
 					f.Required = true
 					f.Validation = true
 					f.Autocomplete = &formular.Autocomplete{Enabled: true, Tag: "email"}
-				}),
-				field("timezone", formular.FieldText, "Timezone", profileValue("timezone", "UTC"), func(f *formular.Field) {
+				}), "Email input with validation and autocomplete hints from the backend."),
+				withHelp(field("timezone", formular.FieldText, "Timezone", profileValue("timezone", "UTC"), func(f *formular.Field) {
 					f.Placeholder = "IANA timezone"
 					f.Autocomplete = &formular.Autocomplete{Enabled: true, Tag: "timezone"}
-				}),
-				field("password", formular.FieldText, "Secret", profileValue("password", ""), func(f *formular.Field) { f.Secret = true }),
-				field("bio", formular.FieldText, "Bio", profileValue("bio", "Line one\nLine two"), func(f *formular.Field) { f.Multiline = true }),
-				field("age", formular.FieldInt, "Age", profileValue("age", 37), func(f *formular.Field) {
+				}), "Text field that requests timezone completions while focused or edited."),
+				withHelp(field("password", formular.FieldText, "Secret", profileValue("password", ""), func(f *formular.Field) { f.Secret = true }), "Secret text is rendered with a password input."),
+				withHelp(field("bio", formular.FieldText, "Bio", profileValue("bio", "Line one\nLine two"), func(f *formular.Field) { f.Multiline = true }), "Multiline text is preserved when the form is applied."),
+				withHelp(field("age", formular.FieldInt, "Age", profileValue("age", 37), func(f *formular.Field) {
 					min, max := 0.0, 130.0
 					f.Min, f.Max = &min, &max
-				}),
-				field("score", formular.FieldFloat, "Score", profileValue("score", 98.5), func(f *formular.Field) {
+				}), "Integer input constrained to a realistic age range."),
+				withHelp(field("score", formular.FieldFloat, "Score", profileValue("score", 98.5), func(f *formular.Field) {
 					fraction := uint(2)
 					f.Fraction = &fraction
-				}),
-				field("avatar", formular.FieldFile, "Avatar file", profileValue("avatar", nil), func(f *formular.Field) {
+				}), "Float input configured for two fractional digits."),
+				withHelp(field("avatar", formular.FieldFile, "Avatar file", profileValue("avatar", nil), func(f *formular.Field) {
 					maxBytes := uint64(4098)
 					f.MaxBytes = &maxBytes
 					f.Accept = []string{"image/png", "image/jpeg"}
-				}),
+				}), "File input limited to small PNG or JPEG payloads for the demo."),
 			},
 		},
 		{
@@ -434,8 +434,8 @@ func leftBlocks() []formular.Block {
 			Generation: 1,
 			Form:       true,
 			Items: []formular.Item{
-				{Type: formular.ItemHeader, ID: "title", Text: "Submit log"},
-				field("level", formular.FieldRadio, "Level", formular.LogInfo, func(f *formular.Field) {
+				{Type: formular.ItemHeader, ID: "title", Text: "Submit log", Help: "This form appends a new line to the Activity log on the right."},
+				withHelp(field("level", formular.FieldRadio, "Level", formular.LogInfo, func(f *formular.Field) {
 					f.AllowedValues = []any{
 						formular.LogTrace,
 						formular.LogDebug,
@@ -444,10 +444,10 @@ func leftBlocks() []formular.Block {
 						formular.LogError,
 						formular.LogPanic,
 					}
-				}),
-				field("message", formular.FieldText, "Message", "User submitted log line", func(f *formular.Field) {
+				}), "Radio fields restrict the value to one of the declared log levels."),
+				withHelp(field("message", formular.FieldText, "Message", "User submitted log line", func(f *formular.Field) {
 					f.Required = true
-				}),
+				}), "Required message text used as the body of the submitted log line."),
 			},
 		},
 	}
@@ -463,30 +463,30 @@ func rightBlocks() []formular.Block {
 			Generation: 1,
 			Form:       false,
 			Items: []formular.Item{
-				{Type: formular.ItemHeader, ID: "title", Text: "Realtime controls"},
-				field("enabled", formular.FieldCheckbox, "Enabled", liveValue("enabled", true), nil),
-				field("mode", formular.FieldRadio, "Mode", liveValue("mode", "balanced"), func(f *formular.Field) {
+				{Type: formular.ItemHeader, ID: "title", Text: "Realtime controls", Help: "Controls in this block send field.update messages as they change."},
+				withHelp(field("enabled", formular.FieldCheckbox, "Enabled", liveValue("enabled", true), nil), "Checkbox values are sent as booleans immediately."),
+				withHelp(field("mode", formular.FieldRadio, "Mode", liveValue("mode", "balanced"), func(f *formular.Field) {
 					f.AllowedValues = []any{"fast", "balanced", "safe"}
-				}),
-				field("volume", formular.FieldRange, "Volume", liveValue("volume", 42), func(f *formular.Field) {
+				}), "Radio options demonstrate allowed values for realtime fields."),
+				withHelp(field("volume", formular.FieldRange, "Volume", liveValue("volume", 42), func(f *formular.Field) {
 					f.Min, f.Max = &min, &max
-				}),
-				field("manualInput", formular.FieldText, "Backend validated input", liveValue("manualInput", "Change the radio below"), func(f *formular.Field) {
+				}), "Range fields use min and max constraints from the backend snapshot."),
+				withHelp(field("manualInput", formular.FieldText, "Backend validated input", liveValue("manualInput", "Change the radio below"), func(f *formular.Field) {
 					status, _ := liveValue("manualStatusMode", formular.StatusUnset).(string)
 					f.Status = status
 					f.StatusText = manualStatusText(status)
-				}),
-				field("manualStatusMode", formular.FieldRadio, "Backend status", liveValue("manualStatusMode", formular.StatusUnset), func(f *formular.Field) {
+				}), "The status text changes when the Backend status radio is changed."),
+				withHelp(field("manualStatusMode", formular.FieldRadio, "Backend status", liveValue("manualStatusMode", formular.StatusUnset), func(f *formular.Field) {
 					f.AllowedValues = []any{formular.StatusUnset, formular.StatusOK, formular.StatusWarn, formular.StatusError}
-				}),
-				{Type: formular.ItemButton, ID: "refresh", Label: "Refresh"},
-				{Type: formular.ItemLabel, ID: "code", Text: "go test ./...", Format: formular.TextCode, Syntax: "sh"},
-				{Type: formular.ItemLogs, ID: "activity-log", Label: "Activity log", Logs: logLines},
-				field("servers", formular.FieldArray, "Servers", nil, func(f *formular.Field) {
+				}), "Changing this field asks the backend to send a field.status update."),
+				{Type: formular.ItemButton, ID: "refresh", Label: "Refresh", Help: "Buttons emit button.press messages with the current menu and block generation."},
+				{Type: formular.ItemLabel, ID: "code", Text: "go test ./...", Format: formular.TextCode, Syntax: "sh", Help: "Code labels preserve whitespace and display monospace content."},
+				{Type: formular.ItemLogs, ID: "activity-log", Label: "Activity log", Logs: logLines, Help: "Log items render structured log lines with level-specific styling."},
+				withHelp(field("servers", formular.FieldArray, "Servers", nil, func(f *formular.Field) {
 					f.Templates = templates
 					f.Elements = serverElements()
 					f.Copyable = &formular.Copyable{Text: serversCopyText()}
-				}),
+				}), "Array fields manage repeatable elements created from backend-declared templates."),
 			},
 		},
 	}
@@ -514,34 +514,34 @@ func serverTemplates() []formular.ArrayTemplate {
 			Name:  "http",
 			Label: "HTTP server",
 			Items: []formular.Item{
-				field("host", formular.FieldText, "Host", "localhost", nil),
-				field("port", formular.FieldInt, "Port", 8080, nil),
-				field("tls", formular.FieldCheckbox, "TLS", false, nil),
-				{Type: formular.ItemButton, ID: "ping", Label: "Ping"},
+				withHelp(field("host", formular.FieldText, "Host", "localhost", nil), "Hostname used by new HTTP server elements."),
+				withHelp(field("port", formular.FieldInt, "Port", 8080, nil), "Integer port for the HTTP endpoint."),
+				withHelp(field("tls", formular.FieldCheckbox, "TLS", false, nil), "Toggles whether the endpoint should use TLS."),
+				{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Nested buttons include their array element path in button.press messages."},
 			},
 		},
 		{
 			Name:  "database",
 			Label: "Database",
 			Items: []formular.Item{
-				field("driver", formular.FieldRadio, "Driver", "postgres", func(f *formular.Field) {
+				withHelp(field("driver", formular.FieldRadio, "Driver", "postgres", func(f *formular.Field) {
 					f.AllowedValues = []any{"postgres", "mysql", "sqlite"}
-				}),
-				field("dsn", formular.FieldText, "DSN", "postgres://localhost/app", nil),
-				field("pool", formular.FieldInt, "Pool size", 10, nil),
-				{Type: formular.ItemButton, ID: "test", Label: "Test connection"},
+				}), "Database driver choice for new database elements."),
+				withHelp(field("dsn", formular.FieldText, "DSN", "postgres://localhost/app", nil), "Connection string for the database element."),
+				withHelp(field("pool", formular.FieldInt, "Pool size", 10, nil), "Maximum connection pool size."),
+				{Type: formular.ItemButton, ID: "test", Label: "Test connection", Help: "Nested action for the selected database element."},
 			},
 		},
 		{
 			Name:  "queue",
 			Label: "Queue",
 			Items: []formular.Item{
-				field("broker", formular.FieldRadio, "Broker", "nats", func(f *formular.Field) {
+				withHelp(field("broker", formular.FieldRadio, "Broker", "nats", func(f *formular.Field) {
 					f.AllowedValues = []any{"nats", "redis", "rabbitmq"}
-				}),
-				field("subject", formular.FieldText, "Subject", "events.created", nil),
-				field("durable", formular.FieldCheckbox, "Durable", true, nil),
-				{Type: formular.ItemButton, ID: "drain", Label: "Drain"},
+				}), "Broker choice for new queue elements."),
+				withHelp(field("subject", formular.FieldText, "Subject", "events.created", nil), "Subject, topic, or routing key consumed by the queue."),
+				withHelp(field("durable", formular.FieldCheckbox, "Durable", true, nil), "Whether queue state should survive broker restarts."),
+				{Type: formular.ItemButton, ID: "drain", Label: "Drain", Help: "Nested action for the selected queue element."},
 			},
 		},
 	}
@@ -569,28 +569,28 @@ func serverElementItems(server serverState) []formular.Item {
 	switch server.Template {
 	case "database":
 		return []formular.Item{
-			field("driver", formular.FieldRadio, "Driver", serverValue(server, "driver", "postgres"), func(f *formular.Field) {
+			withHelp(field("driver", formular.FieldRadio, "Driver", serverValue(server, "driver", "postgres"), func(f *formular.Field) {
 				f.AllowedValues = []any{"postgres", "mysql", "sqlite"}
-			}),
-			field("dsn", formular.FieldText, "DSN", serverValue(server, "dsn", "postgres://localhost/app"), nil),
-			field("pool", formular.FieldInt, "Pool size", serverValue(server, "pool", 10), nil),
-			{Type: formular.ItemButton, ID: "test", Label: "Test connection"},
+			}), "Database driver for this element."),
+			withHelp(field("dsn", formular.FieldText, "DSN", serverValue(server, "dsn", "postgres://localhost/app"), nil), "Connection string for this database element."),
+			withHelp(field("pool", formular.FieldInt, "Pool size", serverValue(server, "pool", 10), nil), "Maximum pool size for this database element."),
+			{Type: formular.ItemButton, ID: "test", Label: "Test connection", Help: "Sends a nested button press for this database element."},
 		}
 	case "queue":
 		return []formular.Item{
-			field("broker", formular.FieldRadio, "Broker", serverValue(server, "broker", "nats"), func(f *formular.Field) {
+			withHelp(field("broker", formular.FieldRadio, "Broker", serverValue(server, "broker", "nats"), func(f *formular.Field) {
 				f.AllowedValues = []any{"nats", "redis", "rabbitmq"}
-			}),
-			field("subject", formular.FieldText, "Subject", serverValue(server, "subject", "events.created"), nil),
-			field("durable", formular.FieldCheckbox, "Durable", serverValue(server, "durable", true), nil),
-			{Type: formular.ItemButton, ID: "drain", Label: "Drain"},
+			}), "Broker for this queue element."),
+			withHelp(field("subject", formular.FieldText, "Subject", serverValue(server, "subject", "events.created"), nil), "Subject, topic, or routing key for this element."),
+			withHelp(field("durable", formular.FieldCheckbox, "Durable", serverValue(server, "durable", true), nil), "Whether this queue element should be durable."),
+			{Type: formular.ItemButton, ID: "drain", Label: "Drain", Help: "Sends a nested button press for this queue element."},
 		}
 	default:
 		return []formular.Item{
-			field("host", formular.FieldText, "Host", serverValue(server, "host", "localhost"), nil),
-			field("port", formular.FieldInt, "Port", serverValue(server, "port", 8080), nil),
-			field("tls", formular.FieldCheckbox, "TLS", serverValue(server, "tls", false), nil),
-			{Type: formular.ItemButton, ID: "ping", Label: "Ping"},
+			withHelp(field("host", formular.FieldText, "Host", serverValue(server, "host", "localhost"), nil), "Host for this HTTP server element."),
+			withHelp(field("port", formular.FieldInt, "Port", serverValue(server, "port", 8080), nil), "Port for this HTTP server element."),
+			withHelp(field("tls", formular.FieldCheckbox, "TLS", serverValue(server, "tls", false), nil), "Whether this HTTP server element uses TLS."),
+			{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Sends a nested button press for this HTTP server element."},
 		}
 	}
 }
@@ -620,5 +620,10 @@ func field(id, kind, label string, value any, configure func(*formular.Field)) f
 	if configure != nil {
 		configure(item.Field)
 	}
+	return item
+}
+
+func withHelp(item formular.Item, help string) formular.Item {
+	item.Help = help
 	return item
 }
