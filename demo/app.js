@@ -34,7 +34,17 @@ function requestSnapshots() {
 }
 
 window.formularFrontendDispatch = (raw) => {
-  const message = JSON.parse(raw);
+  let message;
+  try {
+    message = JSON.parse(raw);
+  } catch (error) {
+    stateNode.textContent = `Ignored malformed backend message: ${error.message}`;
+    return;
+  }
+  if (!message || typeof message !== "object" || typeof message.type !== "string") {
+    stateNode.textContent = "Ignored invalid backend message";
+    return;
+  }
   log("backend -> frontends", message);
   for (const frontend of frontends) frontend.feed(message);
 };

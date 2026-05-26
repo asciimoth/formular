@@ -738,6 +738,31 @@ test("renders backend text without executable HTML", () => {
   assert.match(document.body.textContent, /<script>alert\(1\)<\/script>/);
 });
 
+test("markdown labels render simple inline formatting", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    blocks: [{
+      id: "docs",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "label", id: "intro", format: "markdown", text: "Read **carefully**, run `formular`, then visit [docs](/docs)." }
+      ]
+    }]
+  });
+
+  const label = document.querySelector(".formular-label");
+  assert.equal(label.querySelector("strong").textContent, "carefully");
+  assert.equal(label.querySelector("code").textContent, "formular");
+  assert.equal(label.querySelector("a").textContent, "docs");
+  assert.equal(label.querySelector("a").href, "https://example.test/docs");
+  assert.equal(label.textContent, "Read carefully, run formular, then visit docs.");
+});
+
 test("markdown labels only create safe links", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});
@@ -760,4 +785,45 @@ test("markdown labels only create safe links", () => {
   assert.equal(links[0].hasAttribute("href"), false);
   assert.equal(links[1].href, "https://example.com/path");
   assert.equal(document.querySelectorAll("script,img").length, 0);
+});
+
+test("backend-controlled labels, options, and statuses remain inert", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    blocks: [{
+      id: "<img src=x onerror=alert(1)>",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "progressbar", id: "progress", label: "<svg onload=alert(2)>", progress: 25, help: "<img src=x onerror=alert(3)>" },
+        { type: "logs", id: "logs", label: "<script>alert(4)</script>", logs: [{ level: "\"><img src=x onerror=alert(5)>", text: "<iframe src=javascript:alert(6)></iframe>" }] },
+        { type: "button", id: "button", label: "<img src=x onerror=alert(7)>", help: "<script>alert(8)</script>" },
+        { type: "field", id: "choice", kind: "text", label: "<b>Choice</b>", value: "<option>", allowedValues: ["<img src=x onerror=alert(9)>"] },
+        {
+          type: "field",
+          id: "items",
+          kind: "array",
+          label: "<script>alert(10)</script>",
+          elements: [{ id: "<img src=x onerror=alert(11)>", template: "row", items: [] }],
+          templates: [{ name: "<svg onload=alert(12)>", label: "<img src=x onerror=alert(13)>", items: [] }]
+        }
+      ]
+    }]
+  });
+  menu.feed({
+    type: "field.status",
+    menuId: "settings",
+    field: { blockId: "<img src=x onerror=alert(1)>", fieldId: "choice" },
+    status: "\"><img src=x onerror=alert(14)>",
+    statusText: "<script>alert(15)</script>"
+  });
+
+  assert.equal(document.querySelectorAll("script,img,svg,iframe").length, 0);
+  assert.match(document.body.textContent, /<svg onload=alert\(2\)>/);
+  assert.match(document.body.textContent, /<iframe src=javascript:alert\(6\)><\/iframe>/);
+  assert.match(document.body.textContent, /<script>alert\(15\)<\/script>/);
 });
