@@ -94,7 +94,8 @@ test("renders visible help markers for item help", () => {
     "Button help",
     "Field help"
   ]);
-  assert.match(document.body.textContent, /Field help/);
+  assert.doesNotMatch(document.body.textContent, /Field help/);
+  assert.equal(document.querySelector(".formular-help"), null);
 });
 
 test("form blocks apply collected values only when valid", () => {

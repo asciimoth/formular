@@ -45,7 +45,6 @@ const DEFAULT_THEME = `
 .formular-field-row{align-items:center;display:flex;gap:10px;min-height:34px}
 .formular-field-label{color:#bac2de;font-weight:650}
 .formular-required{color:#f38ba8}
-.formular-help{color:#a6adc8;font-size:.86rem}
 .formular-control,.formular-select,.formular-textarea{background:#11111b;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font:inherit;min-height:34px;padding:6px 8px;width:100%}
 .formular-control:focus,.formular-select:focus,.formular-textarea:focus{border-color:#89b4fa;outline:2px solid rgba(137,180,250,.25)}
 .formular-control[data-status="ok"],.formular-textarea[data-status="ok"]{border-color:#a6e3a1}
@@ -442,8 +441,6 @@ export class FormularMenu {
       }
       if (field.help) label.append(helpMarker(this.prefix, field.help));
     }
-    const help = node.querySelector(`.${css(this.prefix, "help")}`);
-    if (help) help.textContent = field.help || "";
     this.updateFieldStatusDOM(ref, field);
     const key = valueKey(ref);
     const value = this.dirtyValues.has(key) ? this.values.get(key) : clone(field.value ?? null);
@@ -654,12 +651,6 @@ export class FormularMenu {
     if (field.help) label.append(helpMarker(this.prefix, field.help));
     const control = this.fieldControl(block, field, ref, current, disabled);
     wrapper.append(label, control);
-    if (field.help) {
-      const help = document.createElement("span");
-      help.className = css(this.prefix, "help");
-      help.textContent = field.help;
-      wrapper.append(help);
-    }
     if (field.status || field.statusText) wrapper.append(this.statusNode(field.status || "unset", field.statusText || ""));
     return wrapper;
   }
@@ -789,12 +780,6 @@ export class FormularMenu {
     items.className = css(this.prefix, "array-items");
     elements.forEach((element) => items.append(this.renderArrayElement(block, field, ref, element, disabled || field.readonly)));
     wrapper.append(header, items);
-    if (field.help) {
-      const help = document.createElement("div");
-      help.className = css(this.prefix, "help");
-      help.textContent = field.help;
-      wrapper.append(help);
-    }
     return wrapper;
   }
 
