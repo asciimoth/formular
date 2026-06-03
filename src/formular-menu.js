@@ -199,6 +199,7 @@ export class FormularMenu {
     this.menuGeneration = 0;
     this.values = new Map();
     this.dirtyValues = new Set();
+    this.removedArrayElementIDs = new Map();
     this.focusedField = null;
     this.localElementCounter = 0;
     this.destroyed = false;
@@ -219,6 +220,7 @@ export class FormularMenu {
         this.blocks.clear();
         this.values.clear();
         this.dirtyValues.clear();
+        this.removedArrayElementIDs.clear();
         for (const block of message.blocks || []) {
           this.trackLocalElementIDs(block);
           this.blocks.set(block.id, clone(block));
@@ -1071,10 +1073,12 @@ export class FormularMenu {
 
   mergeArrayElements(ref, currentElements, backendElements) {
     const currentById = new Map((currentElements || []).map((element) => [element.id, element]));
-    const merged = (backendElements || []).map((backendElement) => {
+    const removedIDs = this.removedArrayElementIDs.get(valueKey(ref)) || new Set();
+    const merged = (backendElements || []).flatMap((backendElement) => {
+      if (removedIDs.has(backendElement.id)) return [];
       const currentElement = currentById.get(backendElement.id);
-      if (!currentElement || currentElement.template !== backendElement.template) return backendElement;
-      return this.mergeArrayElement(ref, currentElement, backendElement);
+      if (!currentElement || currentElement.template !== backendElement.template) return [backendElement];
+      return [this.mergeArrayElement(ref, currentElement, backendElement)];
     });
     const backendIds = new Set((backendElements || []).map((element) => element.id));
     for (const currentElement of currentElements || []) {
@@ -1149,6 +1153,11 @@ export class FormularMenu {
     const currentField = this.findField(ref) || field;
     const elements = this.getArrayElements(ref, currentField).filter((element) => element.id !== elementId);
     const key = valueKey(ref);
+    if ((currentField.elements || []).some((element) => element.id === elementId)) {
+      const removedIDs = this.removedArrayElementIDs.get(key) || new Set();
+      removedIDs.add(elementId);
+      this.removedArrayElementIDs.set(key, removedIDs);
+    }
     this.values.set(key, elements);
     this.dirtyValues.add(key);
     const value = this.arrayWireValues(elements);
@@ -1205,11 +1214,19 @@ export class FormularMenu {
         this.dirtyValues.delete(key);
       }
     }
+    this.clearBlockRemovedArrayElementIDs(block.id);
   }
 
   clearBlockDirtyValues(blockId) {
     for (const key of [...this.dirtyValues]) {
       if (key.startsWith(`${blockId}\n`)) this.dirtyValues.delete(key);
+    }
+    this.clearBlockRemovedArrayElementIDs(blockId);
+  }
+
+  clearBlockRemovedArrayElementIDs(blockId) {
+    for (const key of [...this.removedArrayElementIDs.keys()]) {
+      if (key.startsWith(`${blockId}\n`)) this.removedArrayElementIDs.delete(key);
     }
   }
 
