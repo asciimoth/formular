@@ -109,6 +109,27 @@ send(formular.MenuSnapshotMessage{
 })
 ```
 
+For ordinary backend code, the Go package also provides constructors and field
+builders that produce the same wire structs without repeating the envelope and
+field-item boilerplate:
+
+```go
+send(formular.ForcedMenuSnapshot("settings", 1, formular.Block{
+    ID:         "main",
+    Order:      10,
+    Generation: 1,
+    Items: []formular.Item{
+        formular.TextField(
+            "name",
+            "Name",
+            "Ada",
+            formular.Required,
+            formular.Placeholder("Display name"),
+        ),
+    },
+}))
+```
+
 In JSON, field properties are flattened into the field item: `kind`, `value`,
 `readonly`, `required`, and so on live next to `type`, `id`, and `label`.
 
@@ -723,7 +744,7 @@ if !ok || msg.Field.BlockID != "template" {
 
 // Top-level array value changed: add/remove/reorder elements or edit many fields at once.
 if msg.Field.FieldID == "parts" && len(msg.Field.ElementPath) == 0 {
-    parts, ok := parseArrayValue(msg.Value)
+    parts, ok := formular.ArrayElementValuesFromAny(msg.Value)
     if ok {
         state.Parts = parts
         sendTemplateBlock()
@@ -790,7 +811,10 @@ A robust backend should handle both:
 switch {
 case msg.Field.FieldID == "servers" && len(msg.Field.ElementPath) == 0:
     // Whole array changed: add, remove, reorder, or bulk edit.
-    state.Servers = parseServers(msg.Value)
+    servers, ok := formular.ArrayElementValuesFromAny(msg.Value)
+    if ok {
+        state.Servers = servers
+    }
 
 case len(msg.Field.ElementPath) > 0:
     // One field inside one element changed.
@@ -823,6 +847,25 @@ Validate every element:
 - `template` must be one of the declared templates.
 - `values` must contain only fields that are valid for that template.
 - Each nested value must have the expected type and range.
+
+The Go helpers use the same scalar decoding rules for top-level and array
+values:
+
+```go
+servers, ok := formular.ArrayElementValuesFromAny(msg.Values["servers"])
+if !ok {
+    return fmt.Errorf("invalid server array")
+}
+for _, server := range servers {
+    host, _ := formular.ArrayElementStringValue(server, "host")
+    port, _ := formular.ArrayElementIntValue(server, "port")
+    _ = host
+    _ = port
+}
+```
+
+Use `StringValue`, `IntValue`, `FloatValue`, and `BoolValue` for non-array form
+values that may come from JSON-decoded payloads.
 
 ## Add autocomplete
 Autocomplete is enabled per text field.
@@ -1125,4 +1168,3 @@ When updating frontend state:
 - Send `block.snapshot` when item text, labels, progress, logs, values, array elements, buttons, or structure changed.
 - Send `menu.snapshot` when the block set changed or frontend state must be reset.
 - Use `force: true` when the frontend should discard remembered local state such as collapse state.
-

@@ -389,8 +389,8 @@ func applyValuesToItems(items []Item, values map[string]any) bool {
 }
 
 func elementsFromValue(field *Field, value any) []ArrayElement {
-	values := arrayValues(value)
-	if len(values) == 0 {
+	values, ok := ArrayElementValuesFromAny(value)
+	if !ok || len(values) == 0 {
 		return nil
 	}
 	out := make([]ArrayElement, 0, len(values))
@@ -414,64 +414,6 @@ func arrayTemplate(field *Field, name string) ArrayTemplate {
 		}
 	}
 	return ArrayTemplate{Name: name}
-}
-
-func arrayValues(value any) []ArrayElementValue {
-	switch raw := value.(type) {
-	case []ArrayElementValue:
-		out := make([]ArrayElementValue, len(raw))
-		for i := range raw {
-			out[i] = raw[i].Copy()
-		}
-		return out
-	case []any:
-		out := make([]ArrayElementValue, 0, len(raw))
-		for _, item := range raw {
-			value, ok := arrayValueFromAny(item)
-			if ok {
-				out = append(out, value)
-			}
-		}
-		return out
-	default:
-		value, ok := arrayValueFromAny(raw)
-		if !ok {
-			return nil
-		}
-		return []ArrayElementValue{value}
-	}
-}
-
-func arrayValueFromAny(value any) (ArrayElementValue, bool) {
-	switch raw := value.(type) {
-	case ArrayElementValue:
-		return raw.Copy(), true
-	case map[string]any:
-		out := ArrayElementValue{}
-		out.ID, _ = raw["id"].(string)
-		out.Template, _ = raw["template"].(string)
-		out.Values, _ = raw["values"].(map[string]any)
-		if out.ID == "" || out.Template == "" {
-			return ArrayElementValue{}, false
-		}
-		if out.Values == nil {
-			out.Values = map[string]any{}
-		}
-		return out, true
-	default:
-		data, err := json.Marshal(raw)
-		if err != nil {
-			return ArrayElementValue{}, false
-		}
-		var out ArrayElementValue
-		if err := json.Unmarshal(data, &out); err != nil {
-			return ArrayElementValue{}, false
-		}
-		if out.ID == "" || out.Template == "" {
-			return ArrayElementValue{}, false
-		}
-		return out, true
-	}
 }
 
 func generationOr(current, next uint64) uint64 {
