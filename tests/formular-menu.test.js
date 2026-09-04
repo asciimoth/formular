@@ -61,6 +61,37 @@ test("renders a menu snapshot and sends field messages", () => {
   assert.equal(outbox[1].blockGeneration, 3);
 });
 
+test("multiline text fields do not wrap and expand to fit their content", async () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const data = snapshot();
+  data.blocks[0].items.push({
+    type: "field",
+    id: "notes",
+    kind: "text",
+    label: "Notes",
+    value: "line one\nline two",
+    multiline: true
+  });
+
+  menu.feed(data);
+  await Promise.resolve();
+
+  const textarea = document.querySelector("textarea");
+  assert.equal(textarea.wrap, "off");
+  assert.equal(textarea.style.overflowY, "hidden");
+
+  Object.defineProperties(textarea, {
+    offsetHeight: { configurable: true, value: 90 },
+    clientHeight: { configurable: true, value: 88 },
+    scrollHeight: { configurable: true, value: 140 }
+  });
+  textarea.value += "\nline three";
+  textarea.dispatchEvent(new window.Event("input", { bubbles: true }));
+
+  assert.equal(textarea.style.height, "142px");
+});
+
 test("renders visible help markers for item help", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

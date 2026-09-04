@@ -53,7 +53,7 @@ const DEFAULT_THEME = `
 .formular-control[data-status="ok"]:focus,.formular-textarea[data-status="ok"]:focus{outline-color:rgba(166,227,161,.3)}
 .formular-control[data-status="warn"]:focus,.formular-textarea[data-status="warn"]:focus{outline-color:rgba(249,226,175,.32)}
 .formular-control[data-status="error"]:focus,.formular-textarea[data-status="error"]:focus{outline-color:rgba(243,139,168,.32)}
-.formular-textarea{min-height:88px;resize:vertical}
+.formular-textarea{min-height:88px;overflow-x:auto;overflow-y:hidden;resize:none;white-space:pre}
 .formular-radio-group{display:flex;flex-wrap:wrap;gap:10px}
 .formular-radio{align-items:center;display:inline-flex;gap:5px}
 .formular-status{font-size:.86rem}
@@ -183,6 +183,13 @@ function helpMarker(prefix, help, { decorative = false } = {}) {
 function setTextWithHelp(node, value, prefix, help, options) {
   node.replaceChildren(document.createTextNode(text(value)));
   if (help) node.append(helpMarker(prefix, help, options));
+}
+
+function autoExpandTextarea(control) {
+  if (control?.tagName !== "TEXTAREA") return;
+  control.style.height = "auto";
+  const borderHeight = control.offsetHeight - control.clientHeight;
+  control.style.height = `${control.scrollHeight + borderHeight}px`;
 }
 
 export class FormularMenu {
@@ -459,6 +466,7 @@ export class FormularMenu {
       control.value = JSON.stringify(value);
     } else {
       control.value = value == null ? "" : String(value);
+      autoExpandTextarea(control);
     }
     return true;
   }
@@ -733,7 +741,10 @@ export class FormularMenu {
     }
     const input = field.multiline ? document.createElement("textarea") : document.createElement("input");
     input.className = field.multiline ? css(this.prefix, "textarea") : css(this.prefix, "control");
-    if (!field.multiline) {
+    if (field.multiline) {
+      input.wrap = "off";
+      input.style.overflowY = "hidden";
+    } else {
       input.type = field.secret ? "password" : field.subtype === "email" ? "email" : field.kind === "range" ? "range" : "text";
       if (field.kind === "int" || field.kind === "float") input.type = "number";
       if (field.kind === "int") input.step = "1";
@@ -749,11 +760,13 @@ export class FormularMenu {
     if (field.min != null) input.min = String(field.min);
     if (field.max != null) input.max = String(field.max);
     input.addEventListener("input", () => {
+      autoExpandTextarea(input);
       const currentField = this.findField(ref) || field;
       const value = normalizeKindValue(currentField, input.value);
       this.commitField(block, field, ref, value);
       if (currentField.autocomplete?.enabled) this.requestAutocomplete(block, currentField, ref, input.value);
     });
+    if (field.multiline) queueMicrotask(() => autoExpandTextarea(input));
     if (field.autocomplete?.enabled) {
       const listId = `${this.prefix}-hints-${Math.random().toString(36).slice(2)}`;
       const list = document.createElement("datalist");
