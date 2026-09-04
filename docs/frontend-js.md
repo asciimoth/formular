@@ -24,6 +24,25 @@ new FormularMenu(target, menuId, outbox, options?)
 - `outbox`: callback receiving frontend-to-backend protocol messages.
 - `options.classPrefix`: CSS class prefix. Defaults to `formular`.
 - `options.defaultTheme`: set to `false` to skip the built-in Catppuccin theme.
+- `options.selectors`: callback that returns current frontend-owned string
+  values for a selector name.
+
+For example, the backend can mark a text field with `"selector": "users"`
+without sending a user list. Supply that list when you create the frontend:
+
+```js
+const menu = new FormularMenu(root, "settings", send, {
+  selectors: (selector) => selector === "users" ? currentUserNames() : undefined
+});
+```
+
+The callback must return an array of strings, or `null` or `undefined` for an
+unknown selector. The frontend calls it during rendering and again before each
+pointer click opens the selection control. Thus, the control shows the current
+frontend values. If the callback does not know the requested name, the frontend
+renders a normal text input. If the current field value is not in the frontend
+list, the control also shows that value so its displayed and submitted values
+stay consistent.
 
 The constructor clears the target node and owns its contents until `destroy()`
 is called or the target node is removed from the document.

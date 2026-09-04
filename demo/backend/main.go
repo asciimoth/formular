@@ -19,6 +19,7 @@ type serverState struct {
 
 var profileValues = map[string]any{
 	"name":     "Ada",
+	"owner":    "Ada",
 	"email":    "admin@example.com",
 	"timezone": "UTC",
 	"password": "",
@@ -490,6 +491,9 @@ func leftBlocks() []formular.Block {
 					f.Validation = true
 					f.Placeholder = "Display name"
 				}), "Required text field with backend validation."),
+				withHelp(field("owner", formular.FieldText, "Owner", profileValue("owner", "Ada"), func(f *formular.Field) {
+					f.Selector = "users"
+				}), "Selector whose current choices come from frontend-owned user data."),
 				withHelp(field("email", formular.FieldText, "Email", profileValue("email", "admin@example.com"), func(f *formular.Field) {
 					f.Subtype = "email"
 					f.Required = true

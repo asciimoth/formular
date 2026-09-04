@@ -249,6 +249,30 @@ Useful text options:
 `secret` asks for password-style display. `multiline` allows newlines.
 `subtype` refines the input, for example `email` or `filepath`.
 
+Use `selector` when the frontend, not the backend, knows the available string
+values. This field asks a configured frontend to show its `users` choices:
+
+```json
+{
+  "type": "field",
+  "id": "owner",
+  "label": "Owner",
+  "kind": "text",
+  "value": "Ada",
+  "selector": "users"
+}
+```
+
+In Go, use the `Selector` field option:
+
+```go
+formular.TextField("owner", "Owner", "Ada", formular.Selector("users"))
+```
+
+The selector name is application-defined. The backend still receives a string
+field value. Do not use `selector` and `allowedValues` on the same field. A
+frontend that does not know the selector name shows a normal text input.
+
 ### Int
 Int fields use JSON integer values.
 

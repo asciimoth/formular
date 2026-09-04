@@ -15,7 +15,7 @@ func TestFieldBuildersApplyOptions(t *testing.T) {
 		Help("Account email"),
 		Status(StatusOK),
 		StatusText("Looks good"),
-		AllowedValues("ada@example.com", "grace@example.com"),
+		Selector("users"),
 		AutocompleteConfig(Autocomplete{Enabled: true, Tag: "email"}),
 	)
 
@@ -32,8 +32,8 @@ func TestFieldBuildersApplyOptions(t *testing.T) {
 	if field.Autocomplete == nil || field.Autocomplete.Tag != "email" {
 		t.Fatalf("missing autocomplete: %+v", field.Autocomplete)
 	}
-	if got := field.AllowedValues[1]; got != "grace@example.com" {
-		t.Fatalf("allowed value = %v, want grace@example.com", got)
+	if field.Selector != "users" {
+		t.Fatalf("selector = %q, want users", field.Selector)
 	}
 	if err := item.Validate(); err != nil {
 		t.Fatal(err)

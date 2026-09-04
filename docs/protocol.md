@@ -142,7 +142,20 @@ Supported text-specific properties:
 - `placeholder`: empty-state text.
 - `multiline`: whether newlines are allowed.
 - `allowedValues`: optional predefined values a frontend may expose as choices when they do not conflict with the subtype.
+- `selector`: optional name of a set of string values supplied by the frontend.
 - `subtype`: optional subtype. Unknown subtypes should be treated as generic text.
+
+Use `selector` when the frontend knows the available values but the backend does
+not. For example, a backend can set `"selector": "users"` and the frontend can
+offer the user names that it knows. A text field must not define both `selector`
+and `allowedValues`.
+
+If the frontend has values for the named selector, it should render a choice
+control and send the selected string as the field value. If it does not know the
+selector name, it should render a normal text input. Selector names are
+application-defined and do not change the wire value type. If the current value
+is not in the frontend set, the control should continue to show the current
+value until the user selects a different value.
 
 Known text subtypes:
 - `email`: always single-line.

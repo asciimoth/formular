@@ -49,6 +49,22 @@ test("left profile timezone field receives backend autocomplete hints", async ({
   })).not.toContain("UTC");
 });
 
+test("left profile owner selector refreshes frontend-known users", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const owner = page.getByLabel("Owner");
+  await expect(owner).toHaveValue(JSON.stringify("Ada"));
+  await expect.poll(() => owner.locator("option").allTextContents()).toEqual(["Ada", "Grace", "Linus"]);
+
+  await page.evaluate(() => window.formularDemoKnownUsers.push("Margaret"));
+  await owner.dispatchEvent("pointerdown");
+  await expect.poll(() => owner.locator("option").allTextContents()).toContain("Margaret");
+
+  await owner.selectOption({ label: "Margaret" });
+  await expect(owner).toHaveValue(JSON.stringify("Margaret"));
+});
+
 test("left progress updates do not interrupt profile input", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

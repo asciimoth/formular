@@ -193,6 +193,11 @@
         "secret": { "type": "boolean", "default": false },
         "multiline": { "type": "boolean", "default": false },
         "subtype": { "$ref": "#/$defs/textSubtype" },
+        "selector": {
+          "description": "Name of a frontend-provided set of text values to render as a selector.",
+          "type": "string",
+          "minLength": 1
+        },
         "autocomplete": {
           "type": "object",
           "additionalProperties": false,

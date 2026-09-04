@@ -195,6 +195,7 @@ export class FormularMenu {
     this.outbox = outbox;
     this.prefix = options.classPrefix || options.prefix || DEFAULT_PREFIX;
     this.defaultTheme = options.defaultTheme !== false;
+    this.selectorProvider = typeof options.selectors === "function" ? options.selectors : null;
     this.blocks = new Map();
     this.menuGeneration = 0;
     this.values = new Map();
@@ -422,13 +423,14 @@ export class FormularMenu {
     }
     if (item.type === "field") {
       if (item.kind === "array") return false;
-      this.patchFieldDOM(node, item);
-      return true;
+      return this.patchFieldDOM(node, item);
     }
     return false;
   }
 
   patchFieldDOM(node, field) {
+    const selectValues = this.selectValues(field);
+    if (node.__formularSelectControl !== this.selectControlSignature(field, selectValues)) return false;
     const active = typeof document !== "undefined" ? document.activeElement : null;
     const hasFocus = active && node.contains(active);
     const ref = { blockId: node.closest("[data-block-id]")?.dataset.blockId || "", fieldId: field.id };
@@ -447,9 +449,9 @@ export class FormularMenu {
     const key = valueKey(ref);
     const value = this.dirtyValues.has(key) ? this.values.get(key) : clone(field.value ?? null);
     if (!this.dirtyValues.has(key)) this.values.set(key, value);
-    if (hasFocus) return;
+    if (hasFocus) return true;
     const control = node.querySelector("input, select, textarea");
-    if (!control || control.type === "file") return;
+    if (!control || control.type === "file") return true;
     if (control.type === "checkbox") control.checked = Boolean(value);
     else if (control.type === "radio") {
       for (const radio of node.querySelectorAll("input[type='radio']")) radio.checked = radio.value === JSON.stringify(value);
@@ -458,6 +460,7 @@ export class FormularMenu {
     } else {
       control.value = value == null ? "" : String(value);
     }
+    return true;
   }
 
   deleteBlockNode(blockId) {
@@ -637,8 +640,10 @@ export class FormularMenu {
     if (field.kind === "array") return this.renderArrayField(block, field, elementPath, disabled);
     const ref = { blockId: block.id, fieldId: field.id, elementPath: elementPath.length ? clone(elementPath) : undefined };
     const current = this.getValue(ref, field.value);
+    const selectValues = this.selectValues(field);
     const wrapper = document.createElement("label");
     wrapper.className = css(this.prefix, "field");
+    wrapper.__formularSelectControl = this.selectControlSignature(field, selectValues);
     wrapper.dataset.fieldId = field.id;
     wrapper.dataset.formularFieldKey = valueKey(ref);
     const label = document.createElement("span");
@@ -651,13 +656,13 @@ export class FormularMenu {
       label.append(required);
     }
     if (field.help) label.append(helpMarker(this.prefix, field.help));
-    const control = this.fieldControl(block, field, ref, current, disabled);
+    const control = this.fieldControl(block, field, ref, current, disabled, selectValues);
     wrapper.append(label, control);
     if (field.status || field.statusText) wrapper.append(this.statusNode(field.status || "unset", field.statusText || ""));
     return wrapper;
   }
 
-  fieldControl(block, field, ref, current, disabled) {
+  fieldControl(block, field, ref, current, disabled, selectValues) {
     const readonly = disabled || field.readonly;
     if (field.kind === "checkbox") {
       const row = document.createElement("span");
@@ -688,16 +693,31 @@ export class FormularMenu {
       }
       return group;
     }
-    if (field.allowedValues?.length && field.kind !== "range") {
+    if (selectValues !== null) {
       const select = document.createElement("select");
       select.className = css(this.prefix, "select");
       select.disabled = readonly;
-      for (const option of field.allowedValues) {
-        const item = document.createElement("option");
-        item.value = JSON.stringify(option);
-        item.textContent = text(option);
-        item.selected = option === current;
-        select.append(item);
+      this.setSelectOptions(select, selectValues, current);
+      if (field.kind === "text" && field.selector && this.selectorProvider) {
+        let refreshedOnPointerDown = false;
+        const refresh = () => {
+          const values = this.frontendSelectorValues(field.selector);
+          if (values !== null) this.setSelectOptions(select, values, this.getValue(ref, current));
+        };
+        select.addEventListener("pointerdown", () => {
+          refreshedOnPointerDown = true;
+          refresh();
+        });
+        select.addEventListener("pointercancel", () => {
+          refreshedOnPointerDown = false;
+        });
+        select.addEventListener("click", () => {
+          if (refreshedOnPointerDown) {
+            refreshedOnPointerDown = false;
+            return;
+          }
+          refresh();
+        });
       }
       select.addEventListener("change", () => this.commitField(block, field, ref, JSON.parse(select.value)));
       return select;
@@ -749,6 +769,46 @@ export class FormularMenu {
       return group;
     }
     return input;
+  }
+
+  selectValues(field) {
+    if (field.kind === "text" && field.selector && this.selectorProvider) {
+      return this.frontendSelectorValues(field.selector);
+    }
+    if (["text", "int", "float"].includes(field.kind) && field.allowedValues?.length) return field.allowedValues;
+    return null;
+  }
+
+  frontendSelectorValues(selector) {
+    try {
+      const values = this.selectorProvider(selector);
+      return Array.isArray(values) ? values.filter((value) => typeof value === "string") : null;
+    } catch {
+      return null;
+    }
+  }
+
+  setSelectOptions(select, values, current) {
+    const options = [];
+    if (!values.some((option) => option === current)) {
+      const item = document.createElement("option");
+      item.value = JSON.stringify(current);
+      item.textContent = text(current);
+      item.selected = true;
+      options.push(item);
+    }
+    for (const option of values) {
+      const item = document.createElement("option");
+      item.value = JSON.stringify(option);
+      item.textContent = text(option);
+      item.selected = option === current;
+      options.push(item);
+    }
+    select.replaceChildren(...options);
+  }
+
+  selectControlSignature(field, values) {
+    return JSON.stringify({ selector: field.selector || null, values });
   }
 
   renderArrayField(block, field, elementPath, disabled) {

@@ -1,5 +1,10 @@
 set dotenv-load := false
 
+check: typos tidy test
+
+typos:
+  typos
+
 default:
     just --list
 

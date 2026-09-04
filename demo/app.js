@@ -5,7 +5,16 @@ const stateNode = document.getElementById("backend-state");
 const restartFrontendsButton = document.getElementById("restart-frontends");
 const restartBackendButton = document.getElementById("restart-backend");
 const frontends = [];
+const frontendKnownUsers = ["Ada", "Grace", "Linus"];
 let backendGeneration = 0;
+
+// This state belongs to the frontend. FormularMenu requests the current values
+// again whenever the user opens a field marked with selector: "users".
+window.formularDemoKnownUsers = frontendKnownUsers;
+
+function selectorValues(selector) {
+  return selector === "users" ? frontendKnownUsers : undefined;
+}
 
 function log(direction, message) {
   const item = document.createElement("li");
@@ -22,8 +31,9 @@ function sendToBackend(message) {
 function createFrontends({ requestSnapshot = true } = {}) {
   for (const frontend of frontends) frontend.destroy();
   frontends.length = 0;
-  frontends.push(new FormularMenu("left-menu", "left", sendToBackend));
-  frontends.push(new FormularMenu("right-menu", "right", sendToBackend));
+  const options = { selectors: selectorValues };
+  frontends.push(new FormularMenu("left-menu", "left", sendToBackend, options));
+  frontends.push(new FormularMenu("right-menu", "right", sendToBackend, options));
   log("demo", { type: "demo.frontends.started", menuId: "both" });
   if (requestSnapshot) requestSnapshots();
 }

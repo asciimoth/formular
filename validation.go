@@ -419,6 +419,9 @@ func (v *validator) field(path string, field Field, inArrayElement bool) {
 
 	switch field.Kind {
 	case FieldText:
+		if field.Selector != "" && len(field.AllowedValues) > 0 {
+			v.add(path+".selector", "must not be used with allowedValues")
+		}
 		if field.MaxBytes != nil {
 			v.add(path+".maxBytes", "is only valid for file fields")
 		}
@@ -558,6 +561,9 @@ func (v *validator) noTextOnlyOptions(path string, field Field) {
 	}
 	if field.Subtype != "" {
 		v.add(path+".subtype", "is only valid for text fields")
+	}
+	if field.Selector != "" {
+		v.add(path+".selector", "is only valid for text fields")
 	}
 	if field.Autocomplete != nil {
 		v.add(path+".autocomplete", "is only valid for text fields")

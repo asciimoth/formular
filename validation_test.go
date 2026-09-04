@@ -233,6 +233,16 @@ func TestValidateFieldValueKinds(t *testing.T) {
 			field: Field{Kind: FieldArray, Value: "not array"},
 			want:  "must be an array of array element values",
 		},
+		{
+			name:  "selector is only valid for text",
+			field: Field{Kind: FieldInt, Selector: "users"},
+			want:  "selector: is only valid for text fields",
+		},
+		{
+			name:  "selector conflicts with allowed values",
+			field: Field{Kind: FieldText, Selector: "users", AllowedValues: []any{"Ada"}},
+			want:  "selector: must not be used with allowedValues",
+		},
 	}
 
 	for _, tt := range tests {
@@ -249,6 +259,7 @@ func TestValidateFieldValueKinds(t *testing.T) {
 
 	valid := []Field{
 		{Kind: FieldText, Value: "hello"},
+		{Kind: FieldText, Value: "Ada", Selector: "users"},
 		{Kind: FieldInt, Value: float64(3)},
 		{Kind: FieldFloat, Value: 3.14},
 		{Kind: FieldFile, Value: "aGVsbG8="},

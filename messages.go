@@ -349,6 +349,8 @@ type Field struct {
 	Multiline bool `json:"multiline,omitempty"`
 	// Subtype refines text fields, for example email or filepath.
 	Subtype string `json:"subtype,omitempty"`
+	// Selector names a frontend-provided set of text values to offer as choices.
+	Selector string `json:"selector,omitempty"`
 	// Autocomplete configures optional completion requests for text fields.
 	Autocomplete *Autocomplete `json:"autocomplete,omitempty"`
 	// AllowedValues enumerates values the frontend may offer as choices.

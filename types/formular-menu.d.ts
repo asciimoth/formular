@@ -1,11 +1,13 @@
 export type FormularTarget = HTMLElement | string;
 
 export type FormularOutbox = (message: FrontendMessage | UnknownFrontendMessage) => void;
+export type FormularSelectorProvider = (selector: string) => readonly string[] | null | undefined;
 
 export interface FormularMenuOptions {
   classPrefix?: string;
   prefix?: string;
   defaultTheme?: boolean;
+  selectors?: FormularSelectorProvider;
 }
 
 export interface MessageBase {
@@ -98,6 +100,7 @@ export interface FieldItem extends ItemBase {
   secret?: boolean;
   multiline?: boolean;
   subtype?: string;
+  selector?: string;
   autocomplete?: {
     enabled?: boolean;
     tag?: string;

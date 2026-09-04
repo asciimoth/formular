@@ -183,6 +183,81 @@ test("applies autocomplete hints to the focused datalist input", () => {
   assert.deepEqual([...list.querySelectorAll("option")].map((option) => option.value), ["Europe/Tbilisi"]);
 });
 
+test("renders frontend-provided selector values for a marked text field", () => {
+  setupDom();
+  const outbox = [];
+  let users = ["Ada", "Grace"];
+  let selectorCalls = 0;
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message), {
+    selectors: (selector) => {
+      selectorCalls += 1;
+      return selector === "users" ? users : undefined;
+    }
+  });
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "profile",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [
+        { type: "field", id: "owner", kind: "text", label: "Owner", value: "Ada", selector: "users" },
+        { type: "field", id: "assignee", kind: "text", label: "Assignee", value: "Linus", selector: "users" },
+        { type: "field", id: "reviewer", kind: "text", label: "Reviewer", value: "", selector: "unknown" }
+      ]
+    }]
+  });
+
+  const select = document.querySelector("select");
+  assert.deepEqual([...select.options].map((option) => option.textContent), ["Ada", "Grace"]);
+  assert.equal(select.value, JSON.stringify("Ada"));
+  const assignee = document.querySelectorAll("select")[1];
+  assert.deepEqual([...assignee.options].map((option) => option.textContent), ["Linus", "Ada", "Grace"]);
+  assert.equal(assignee.value, JSON.stringify("Linus"));
+  assert.equal(document.querySelectorAll("input[type='text']").length, 1);
+  assert.equal(selectorCalls, 3);
+
+  select.value = JSON.stringify("Grace");
+  select.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(outbox.at(-1).type, "field.update");
+  assert.equal(outbox.at(-1).value, "Grace");
+
+  users = ["Grace", "Linus"];
+  select.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+  select.click();
+  assert.equal(selectorCalls, 4);
+  assert.deepEqual([...select.options].map((option) => option.textContent), ["Grace", "Linus"]);
+  assert.equal(select.value, JSON.stringify("Grace"));
+
+  users = ["Grace", "Margaret"];
+  select.click();
+  assert.equal(selectorCalls, 5);
+  assert.deepEqual([...select.options].map((option) => option.textContent), ["Grace", "Margaret"]);
+
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blockGeneration: 2,
+    block: {
+      id: "profile",
+      order: 1,
+      generation: 2,
+      form: false,
+      items: [
+        { type: "field", id: "owner", kind: "text", label: "Owner", value: "Ada" },
+        { type: "field", id: "assignee", kind: "text", label: "Assignee", value: "Linus", selector: "users" },
+        { type: "field", id: "reviewer", kind: "text", label: "Reviewer", value: "", selector: "unknown" }
+      ]
+    }
+  });
+  assert.equal(document.querySelectorAll("select").length, 1);
+  assert.equal(document.querySelectorAll("input[type='text']").length, 2);
+});
+
 test("non-forced backend updates preserve local collapse state", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

@@ -102,6 +102,18 @@ func AllowedValues(values ...any) FieldOption {
 	}
 }
 
+// Selector sets the name of a frontend-provided set of text values.
+//
+// A selector lets the frontend supply choices that are not known to the
+// backend, such as the names of users known to the local application.
+func Selector(name string) FieldOption {
+	return func(item *Item) {
+		withField(item, func(field *Field) {
+			field.Selector = name
+		})
+	}
+}
+
 // AutocompleteConfig sets text-field autocomplete behavior.
 //
 // The name avoids colliding with the Autocomplete struct type.
