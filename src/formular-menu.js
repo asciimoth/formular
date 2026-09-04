@@ -814,6 +814,7 @@ export class FormularMenu {
   renderArrayField(block, field, elementPath, disabled) {
     const ref = { blockId: block.id, fieldId: field.id, elementPath: elementPath.length ? clone(elementPath) : undefined };
     const elements = this.getArrayElements(ref, field);
+    const templates = field.templates || [];
     const wrapper = document.createElement("div");
     wrapper.className = `${css(this.prefix, "field")} ${css(this.prefix, "array")}`;
     const header = document.createElement("div");
@@ -824,19 +825,22 @@ export class FormularMenu {
     const actions = document.createElement("span");
     actions.className = css(this.prefix, "array-actions");
     if (field.copyable) actions.append(this.copyButton(() => this.arrayCopyText(ref, field)));
-    const templateSelect = document.createElement("select");
-    templateSelect.className = css(this.prefix, "select");
-    templateSelect.disabled = disabled || field.readonly || !(field.templates || []).length;
-    for (const template of field.templates || []) {
-      const option = document.createElement("option");
-      option.value = template.name;
-      option.textContent = template.label || template.name;
-      templateSelect.append(option);
+    let templateSelect;
+    if (templates.length > 1) {
+      templateSelect = document.createElement("select");
+      templateSelect.className = css(this.prefix, "select");
+      for (const template of templates) {
+        const option = document.createElement("option");
+        option.value = template.name;
+        option.textContent = template.label || template.name;
+        templateSelect.append(option);
+      }
+      actions.append(templateSelect);
     }
     const add = this.button("+", "Add element");
-    add.disabled = templateSelect.disabled;
-    add.addEventListener("click", () => this.addArrayElement(block, field, ref, templateSelect.value));
-    actions.append(templateSelect, add);
+    add.disabled = disabled || field.readonly || !templates.length;
+    add.addEventListener("click", () => this.addArrayElement(block, field, ref, templateSelect?.value || templates[0].name));
+    actions.append(add);
     header.append(label, actions);
     const items = document.createElement("div");
     items.className = css(this.prefix, "array-items");

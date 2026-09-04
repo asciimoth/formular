@@ -569,6 +569,36 @@ test("copyable array fields copy current array values", async () => {
   ]);
 });
 
+test("array fields hide the selector when only one template is available", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "live",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [{
+        type: "field",
+        id: "servers",
+        kind: "array",
+        label: "Servers",
+        templates: [{
+          name: "http",
+          items: [{ type: "field", id: "host", kind: "text", label: "Host", value: "new.local" }]
+        }]
+      }]
+    }]
+  });
+
+  assert.equal(document.querySelector(".formular-array-actions select"), null);
+  document.querySelector(".formular-array-actions button").click();
+  assert.equal(document.querySelector(".formular-element input").value, "new.local");
+});
+
 test("regular block snapshots update clean array field values", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});
@@ -679,7 +709,6 @@ test("cached local array elements advance new local ids after force snapshots", 
     }]
   });
 
-  document.querySelector(".formular-array select").value = "entry";
   document.querySelector(".formular-icon").click();
 
   assert.match(document.body.textContent, /Items: local-4/);
