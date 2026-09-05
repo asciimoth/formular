@@ -1,5 +1,7 @@
 package formular
 
+import "encoding/base64"
+
 // MenuSnapshot constructs a complete menu.snapshot message.
 //
 // The blocks are deep-copied so callers can continue mutating local menu
@@ -73,5 +75,57 @@ func AutocompleteHints(menuID string, menuGen uint64, ref FieldRef, prefix strin
 		Field:  ref.Copy(),
 		Prefix: prefix,
 		Hints:  copySlice(hints),
+	}
+}
+
+// DialogCreate constructs a dialog.create message.
+//
+// The dialog and all attached resources are copied before they are stored in
+// the message.
+func DialogCreate(menuID string, menuGen uint64, dialog Dialog) DialogCreateMessage {
+	return DialogCreateMessage{
+		MessageBase: MessageBase{
+			Type:           MessageDialogCreate,
+			MenuID:         menuID,
+			MenuGeneration: menuGen,
+		},
+		Dialog: dialog.Copy(),
+	}
+}
+
+// YesNoDialog constructs a yes/no dialog description.
+func YesNoDialog(id, title, text string) Dialog {
+	return Dialog{ID: id, Kind: DialogKindYesNo, Title: title, Text: text}
+}
+
+// SelectionDialog constructs a single-selection dialog description.
+func SelectionDialog(id, title, text string, options ...DialogOption) Dialog {
+	return Dialog{
+		ID:      id,
+		Kind:    DialogKindSelection,
+		Title:   title,
+		Text:    text,
+		Options: copyDialogOptions(options),
+	}
+}
+
+// CaptchaDialog constructs a captcha dialog description with one image.
+func CaptchaDialog(id, title, text string, image DialogResource) Dialog {
+	return Dialog{
+		ID:        id,
+		Kind:      DialogKindCaptcha,
+		Title:     title,
+		Text:      text,
+		Resources: []DialogResource{image.Copy()},
+	}
+}
+
+// DialogResourceFromBytes constructs an attached resource from raw bytes.
+func DialogResourceFromBytes(id, mimeType, alt string, data []byte) DialogResource {
+	return DialogResource{
+		ID:       id,
+		MIMEType: mimeType,
+		Data:     base64.StdEncoding.EncodeToString(data),
+		Alt:      alt,
 	}
 }

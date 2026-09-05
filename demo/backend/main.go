@@ -17,6 +17,11 @@ type serverState struct {
 	Values   map[string]any
 }
 
+type pendingDialog struct {
+	MenuID string
+	Kind   string
+}
+
 var profileValues = map[string]any{
 	"name":     "Ada",
 	"owner":    "Ada",
@@ -40,6 +45,8 @@ var liveValues = map[string]any{
 var progressValue uint
 var instanceID int
 var generatedServerCounter int
+var dialogCounter int
+var pendingDialogs = map[string]pendingDialog{}
 var logLines = []formular.LogLine{
 	{Level: formular.LogInfo, Text: "Demo backend initialized"},
 	{Level: formular.LogDebug, Text: "Waiting for form submissions"},
@@ -112,6 +119,8 @@ func backendReceive(msg map[string]any) {
 	case formular.MessageFieldUpdate:
 		updateField(menuID, msg)
 		ack(menuID, "live", "Realtime update received")
+	case formular.MessageDialogResponse:
+		dialogResponse(menuID, msg)
 	}
 }
 
@@ -227,6 +236,10 @@ func autocompleteValues(fieldID string) []string {
 
 func button(menuID string, msg map[string]any) {
 	buttonID, _ := msg["buttonId"].(string)
+	if strings.HasPrefix(buttonID, "dialog-") {
+		requestDialog(menuID, buttonID)
+		return
+	}
 	if buttonID == "refresh" {
 		ack(menuID, "live", "Refresh button pressed")
 		return
@@ -237,6 +250,120 @@ func button(menuID string, msg map[string]any) {
 	}
 	ack(menuID, "profile", "Button "+buttonID+" pressed")
 }
+
+func requestDialog(menuID, buttonID string) {
+	dialogCounter++
+	dialogID := buttonID + "-" + jsonNumberText(dialogCounter)
+	var dialog formular.Dialog
+
+	switch buttonID {
+	case "dialog-yesno":
+		dialog = formular.YesNoDialog(
+			dialogID,
+			"Continue with the demo?",
+			"This yes/no dialog returns a boolean result.",
+		)
+		dialog.YesLabel = "Continue"
+		dialog.NoLabel = "Stop"
+	case "dialog-selection":
+		dialog = formular.SelectionDialog(
+			dialogID,
+			"Select demo topics",
+			"Select one or more topics to include.",
+			formular.DialogOption{Value: "protocol", Label: "Protocol", Selected: true},
+			formular.DialogOption{Value: "go", Label: "Go library"},
+			formular.DialogOption{Value: "javascript", Label: "JavaScript library", Selected: true},
+		)
+		dialog.Multiple = true
+		dialog.SubmitLabel = "Use selection"
+	case "dialog-captcha":
+		image := formular.DialogResourceFromBytes(
+			"challenge",
+			"image/svg+xml",
+			"Captcha challenge",
+			[]byte(demoCaptchaSVG),
+		)
+		dialog = formular.CaptchaDialog(
+			dialogID,
+			"Complete the demo captcha",
+			"Enter the text shown in the image.",
+			image,
+		)
+		dialog.Placeholder = "Captcha text"
+	default:
+		return
+	}
+
+	pendingDialogs[dialogID] = pendingDialog{MenuID: menuID, Kind: dialog.Kind}
+	send(formular.DialogCreate(menuID, 1, dialog))
+}
+
+func dialogResponse(menuID string, msg map[string]any) {
+	dialogID, _ := msg["dialogId"].(string)
+	value, exists := msg["value"]
+	if dialogID == "" || !exists {
+		return
+	}
+	pending, ok := pendingDialogs[dialogID]
+	if !ok || pending.MenuID != menuID {
+		return
+	}
+	delete(pendingDialogs, dialogID)
+
+	var result string
+	switch pending.Kind {
+	case formular.DialogKindYesNo:
+		if value == nil {
+			result = "Yes/no dialog canceled"
+		} else {
+			accepted, ok := formular.BoolValue(value)
+			if !ok {
+				return
+			}
+			if accepted {
+				result = "Yes/no result: continue"
+			} else {
+				result = "Yes/no result: stop"
+			}
+		}
+	case formular.DialogKindSelection:
+		if value == nil {
+			result = "Selection dialog canceled"
+			break
+		}
+		values, ok := formular.DialogSelectionValuesFromAny(value)
+		if !ok {
+			return
+		}
+		result = "Selection result: " + strings.Join(values, ", ")
+	case formular.DialogKindCaptcha:
+		if value == nil {
+			result = "Captcha dialog canceled"
+			break
+		}
+		answer, ok := formular.StringValue(value)
+		if !ok {
+			return
+		}
+		if strings.EqualFold(strings.TrimSpace(answer), demoCaptchaAnswer) {
+			result = "Captcha result: correct"
+		} else {
+			result = "Captcha result: incorrect"
+		}
+	default:
+		return
+	}
+
+	ack(menuID, "dialogs", result)
+}
+
+const demoCaptchaAnswer = "4M7K"
+
+const demoCaptchaSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" viewBox="0 0 300 100">
+<rect width="300" height="100" rx="10" fill="#cdd6f4"/>
+<path d="M12 72 L288 24 M18 22 L282 79" stroke="#89b4fa" stroke-width="5" opacity=".8"/>
+<text x="150" y="67" text-anchor="middle" font-family="monospace" font-size="48" font-weight="700" letter-spacing="12" fill="#1e1e2e">4M7K</text>
+</svg>`
 
 func generateServerElement(msg map[string]any) {
 	path := elementPath(msg)
@@ -541,6 +668,19 @@ func leftBlocks() []formular.Block {
 				withHelp(field("message", formular.FieldText, "Message", "User submitted log line", func(f *formular.Field) {
 					f.Required = true
 				}), "Required message text used as the body of the submitted log line."),
+			},
+		},
+		{
+			ID:         "dialogs",
+			Order:      30,
+			Generation: 1,
+			Form:       false,
+			Items: []formular.Item{
+				{Type: formular.ItemHeader, ID: "title", Text: "One-shot dialogs", Help: "The backend requests modal dialogs through dialog.create messages."},
+				{Type: formular.ItemLabel, ID: "description", Text: "Open each dialog to see its dialog.response result below.", Format: formular.TextPlain},
+				{Type: formular.ItemButton, ID: "dialog-yesno", Label: "Yes/no dialog", Help: "Opens a dialog that returns true or false."},
+				{Type: formular.ItemButton, ID: "dialog-selection", Label: "Selection dialog", Help: "Opens a multiple-selection dialog."},
+				{Type: formular.ItemButton, ID: "dialog-captcha", Label: "Captcha dialog", Help: "Opens a text captcha with an attached base64 image."},
 			},
 		},
 	}

@@ -10,7 +10,7 @@ import (
 // It is intended for frontends and middleware that forward Formular messages and
 // need to serve a newly connected frontend from locally cached menu state. It
 // applies only messages that affect the observable menu snapshot. Ephemeral
-// messages such as autocomplete hints and requests are ignored.
+// messages such as autocomplete and dialog messages are ignored.
 type MenuSnapshotState struct {
 	menus map[string]MenuSnapshotMessage
 }

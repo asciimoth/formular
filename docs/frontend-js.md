@@ -89,6 +89,7 @@ Text-like `PREFIX-control` and `PREFIX-textarea` fields also receive a
 - `block.delete` removes one block.
 - `field.status` updates validation state, status text, and readonly state.
 - `autocomplete.hints` populates the focused text input datalist.
+- `dialog.create` creates a native `<dialog>` and opens it with `showModal()`.
 - `progressbar` items render readonly progress and do not send frontend messages.
 - `logs` items render readonly log lines with colored level prefixes.
 - Non-form field edits send `field.update`.
@@ -96,6 +97,59 @@ Text-like `PREFIX-control` and `PREFIX-textarea` fields also receive a
 - Form blocks render local Reset and Apply controls; Apply sends `form.apply`.
 - Buttons send `button.press`.
 - Autocomplete-enabled text inputs send `autocomplete.request`.
+- A completed or canceled dialog sends one `dialog.response`.
 
 Array fields are edited locally and serialized as the protocol's
 `ArrayElementValue[]` shape when sent to the backend.
+
+## Dialogs
+
+The browser frontend supports `yesno`, `selection`, and `captcha` dialogs.
+Dialogs are independent of blocks. A dialog can arrive before or after a menu
+snapshot.
+
+```js
+menu.feed({
+  type: "dialog.create",
+  menuId: "settings",
+  menuGeneration: 4,
+  dialog: {
+    id: "delete-profile",
+    kind: "yesno",
+    title: "Delete profile?",
+    text: "This action cannot be undone."
+  }
+});
+```
+
+The renderer appends a `<dialog>` to the owned target and calls `showModal()`.
+Yes and No send boolean values. Selection sends a string or string array.
+Captcha sends the text input. Escape and Cancel send `null`.
+After the first response, the renderer closes and removes the element.
+
+For captcha images, send standard base64 text. Do not send a remote URL:
+
+```js
+{
+  type: "dialog.create",
+  menuId: "settings",
+  menuGeneration: 4,
+  dialog: {
+    id: "captcha",
+    kind: "captcha",
+    title: "Verification",
+    resources: [{
+      id: "challenge",
+      mimeType: "image/png",
+      data: "iVBORw0KGgoAAAANSUhEUgAA...",
+      alt: "Captcha challenge"
+    }]
+  }
+}
+```
+
+The default theme uses `PREFIX-dialog`, `PREFIX-dialog-form`,
+`PREFIX-dialog-title`, `PREFIX-dialog-text`, `PREFIX-dialog-resources`,
+`PREFIX-dialog-resource`, `PREFIX-dialog-resource-image`, and
+`PREFIX-dialog-actions`. The renderer uses safe text DOM properties for dialog
+titles, text, labels, and alternative text.

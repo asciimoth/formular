@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/dialog-create-message.schema.json",
+  "title": "Backend Dialog Create Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "dialog"],
+      "properties": {
+        "type": { "const": "dialog.create" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "dialog": { "$ref": "common.schema.json#/$defs/dialog" }
+      }
+    }
+  ]
+}

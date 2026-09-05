@@ -11,11 +11,20 @@ const (
 	MessageBlockDelete         = "block.delete"
 	MessageFieldStatus         = "field.status"
 	MessageAutocompleteHints   = "autocomplete.hints"
+	MessageDialogCreate        = "dialog.create"
 	MessageFieldUpdate         = "field.update"
 	MessageFieldValidate       = "field.validate"
 	MessageFormApply           = "form.apply"
 	MessageButtonPress         = "button.press"
 	MessageAutocompleteRequest = "autocomplete.request"
+	MessageDialogResponse      = "dialog.response"
+)
+
+// Dialog kind constants supported by the base protocol.
+const (
+	DialogKindYesNo     = "yesno"
+	DialogKindSelection = "selection"
+	DialogKindCaptcha   = "captcha"
 )
 
 // Item type constants used by menu and array element content.
@@ -165,6 +174,23 @@ func (m AutocompleteHintsMessage) Copy() AutocompleteHintsMessage {
 	return m
 }
 
+// DialogCreateMessage is sent by a backend to request one modal interaction.
+//
+// A frontend sends at most one dialog.response for this message. Resources are
+// part of Dialog and therefore travel in the same message as their use.
+type DialogCreateMessage struct {
+	MessageBase
+	// Dialog describes the modal interaction and any attached resources.
+	Dialog Dialog `json:"dialog"`
+}
+
+// Copy returns a deep copy of m.
+func (m DialogCreateMessage) Copy() DialogCreateMessage {
+	m.MessageBase = m.MessageBase.Copy()
+	m.Dialog = m.Dialog.Copy()
+	return m
+}
+
 // FieldUpdateMessage is sent by a frontend for realtime field changes.
 type FieldUpdateMessage struct {
 	MessageBase
@@ -247,6 +273,92 @@ func (m AutocompleteRequestMessage) Copy() AutocompleteRequestMessage {
 	m.MessageBase = m.MessageBase.Copy()
 	m.Field = m.Field.Copy()
 	return m
+}
+
+// DialogResponseMessage is sent by a frontend when a one-shot dialog ends.
+//
+// Value is bool for a yes/no dialog, string or []string for a selection,
+// string for a captcha, and nil when the user cancels the dialog.
+type DialogResponseMessage struct {
+	MessageBase
+	// DialogID correlates this response with a dialog.create message.
+	DialogID string `json:"dialogId"`
+	// Value is the user result, or nil when the user cancels the dialog.
+	Value any `json:"value"`
+}
+
+// Copy returns a deep copy of m.
+func (m DialogResponseMessage) Copy() DialogResponseMessage {
+	m.MessageBase = m.MessageBase.Copy()
+	m.Value = copyAny(m.Value)
+	return m
+}
+
+// Dialog describes one backend-requested modal interaction.
+type Dialog struct {
+	// ID is unique among pending dialogs for one menu.
+	ID string `json:"id"`
+	// Kind is yesno, selection, or captcha.
+	Kind string `json:"kind"`
+	// Title is the user-facing modal heading.
+	Title string `json:"title"`
+	// Text is optional plain text shown before the input controls.
+	Text string `json:"text,omitempty"`
+	// Options contains the allowed results for a selection dialog.
+	Options []DialogOption `json:"options,omitempty"`
+	// Multiple permits more than one result in a selection dialog.
+	Multiple bool `json:"multiple,omitempty"`
+	// Resources contains base64-encoded content displayed by the dialog.
+	Resources []DialogResource `json:"resources,omitempty"`
+	// Placeholder is optional empty-state text for captcha input.
+	Placeholder string `json:"placeholder,omitempty"`
+	// YesLabel replaces the default Yes button label for a yes/no dialog.
+	YesLabel string `json:"yesLabel,omitempty"`
+	// NoLabel replaces the default No button label for a yes/no dialog.
+	NoLabel string `json:"noLabel,omitempty"`
+	// SubmitLabel replaces the default Submit button label.
+	SubmitLabel string `json:"submitLabel,omitempty"`
+	// CancelLabel replaces the default Cancel button label.
+	CancelLabel string `json:"cancelLabel,omitempty"`
+}
+
+// Copy returns a deep copy of d.
+func (d Dialog) Copy() Dialog {
+	d.Options = copyDialogOptions(d.Options)
+	d.Resources = copyDialogResources(d.Resources)
+	return d
+}
+
+// DialogOption is one result that a selection dialog can return.
+type DialogOption struct {
+	// Value is the stable backend-facing result.
+	Value string `json:"value"`
+	// Label is the user-facing option text.
+	Label string `json:"label"`
+	// Selected marks an initial selection.
+	Selected bool `json:"selected,omitempty"`
+}
+
+// Copy returns a deep copy of o.
+func (o DialogOption) Copy() DialogOption {
+	return o
+}
+
+// DialogResource is content attached directly to a dialog.create message.
+type DialogResource struct {
+	// ID identifies the resource inside this dialog.
+	ID string `json:"id"`
+	// MIMEType identifies the decoded content type.
+	MIMEType string `json:"mimeType"`
+	// Data is the resource bytes encoded as standard base64 text.
+	Data string `json:"data"`
+	// Alt is optional alternative text for visual content.
+	Alt string `json:"alt,omitempty"`
+}
+
+// Copy returns a deep copy of r.
+func (r DialogResource) Copy() DialogResource {
+	return r
 }
 
 // Block is a backend-defined menu section with independent generation.
@@ -568,6 +680,24 @@ func copyElementPath(in []ElementPathSegment) []ElementPathSegment {
 	for i := range in {
 		out[i] = in[i].Copy()
 	}
+	return out
+}
+
+func copyDialogOptions(in []DialogOption) []DialogOption {
+	if in == nil {
+		return nil
+	}
+	out := make([]DialogOption, len(in))
+	copy(out, in)
+	return out
+}
+
+func copyDialogResources(in []DialogResource) []DialogResource {
+	if in == nil {
+		return nil
+	}
+	out := make([]DialogResource, len(in))
+	copy(out, in)
 	return out
 }
 

@@ -44,6 +44,54 @@ export type TextFormat = "plain" | "markdown" | "code";
 export type FieldKind = "text" | "int" | "float" | "file" | "checkbox" | "radio" | "range" | "array";
 export type ValidationStatus = "unset" | "ok" | "warn" | "error";
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "panic";
+export type DialogKind = "yesno" | "selection" | "captcha";
+
+export interface DialogResource {
+  id: string;
+  mimeType: string;
+  /** Resource bytes encoded as standard base64 text. */
+  data: string;
+  alt?: string;
+}
+
+export interface DialogOption {
+  value: string;
+  label: string;
+  selected?: boolean;
+}
+
+export interface DialogBase {
+  id: string;
+  kind: DialogKind;
+  title: string;
+  text?: string;
+  resources?: DialogResource[];
+}
+
+export interface YesNoDialog extends DialogBase {
+  kind: "yesno";
+  yesLabel?: string;
+  noLabel?: string;
+}
+
+export interface SelectionDialog extends DialogBase {
+  kind: "selection";
+  options: DialogOption[];
+  multiple?: boolean;
+  submitLabel?: string;
+  cancelLabel?: string;
+}
+
+export interface CaptchaDialog extends DialogBase {
+  kind: "captcha";
+  resources: DialogResource[];
+  placeholder?: string;
+  submitLabel?: string;
+  cancelLabel?: string;
+}
+
+export type Dialog = YesNoDialog | SelectionDialog | CaptchaDialog;
+export type DialogResponseValue = boolean | string | string[] | null;
 
 export interface ItemBase {
   type: string;
@@ -174,12 +222,18 @@ export interface AutocompleteHintsMessage extends MessageBase {
   hints: string[];
 }
 
+export interface DialogCreateMessage extends MessageBase {
+  type: "dialog.create";
+  dialog: Dialog;
+}
+
 export type BackendMessage =
   | MenuSnapshotMessage
   | BlockSnapshotMessage
   | BlockDeleteMessage
   | FieldStatusMessage
-  | AutocompleteHintsMessage;
+  | AutocompleteHintsMessage
+  | DialogCreateMessage;
 
 export interface FieldUpdateMessage extends MessageBase {
   type: "field.update";
@@ -212,6 +266,12 @@ export interface AutocompleteRequestMessage extends MessageBase {
   prefix: string;
 }
 
+export interface DialogResponseMessage extends MessageBase {
+  type: "dialog.response";
+  dialogId: string;
+  value: DialogResponseValue;
+}
+
 export interface UnknownFrontendMessage extends MessageBase {
   [key: string]: unknown;
 }
@@ -221,7 +281,8 @@ export type FrontendMessage =
   | FieldValidateMessage
   | FormApplyMessage
   | ButtonPressMessage
-  | AutocompleteRequestMessage;
+  | AutocompleteRequestMessage
+  | DialogResponseMessage;
 
 export declare class FormularMenu {
   constructor(target: FormularTarget, menuId: string, outbox: FormularOutbox, options?: FormularMenuOptions);

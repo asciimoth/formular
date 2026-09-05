@@ -7,6 +7,7 @@
     { "$ref": "block-snapshot-message.schema.json" },
     { "$ref": "block-delete-message.schema.json" },
     { "$ref": "field-status-message.schema.json" },
-    { "$ref": "autocomplete-hints-message.schema.json" }
+    { "$ref": "autocomplete-hints-message.schema.json" },
+    { "$ref": "dialog-create-message.schema.json" }
   ]
 }

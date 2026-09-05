@@ -14,6 +14,22 @@ function setupDom() {
     configurable: true,
     value: dom.window.navigator
   });
+  Object.defineProperties(dom.window.HTMLDialogElement.prototype, {
+    showModal: {
+      configurable: true,
+      value() {
+        this.setAttribute("open", "");
+        this.__formularShowModalCalled = true;
+      }
+    },
+    close: {
+      configurable: true,
+      value() {
+        this.removeAttribute("open");
+        this.dispatchEvent(new dom.window.Event("close"));
+      }
+    }
+  });
   return dom;
 }
 
@@ -962,4 +978,165 @@ test("backend-controlled labels, options, and statuses remain inert", () => {
   assert.match(document.body.textContent, /<svg onload=alert\(2\)>/);
   assert.match(document.body.textContent, /<iframe src=javascript:alert\(6\)><\/iframe>/);
   assert.match(document.body.textContent, /<script>alert\(15\)<\/script>/);
+});
+
+test("yes/no dialogs use showModal and send one boolean response", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+
+  assert.equal(menu.feed({
+    type: "dialog.create",
+    menuId: "settings",
+    menuGeneration: 7,
+    dialog: {
+      id: "delete",
+      kind: "yesno",
+      title: "Delete item?",
+      text: "This cannot be undone.",
+      yesLabel: "Delete",
+      noLabel: "Keep"
+    }
+  }), true);
+
+  const dialog = document.querySelector("dialog");
+  assert.ok(dialog);
+  assert.equal(dialog.open, true);
+  assert.equal(dialog.__formularShowModalCalled, true);
+  assert.match(dialog.textContent, /This cannot be undone/);
+
+  const yes = [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Delete");
+  yes.click();
+
+  assert.deepEqual(outbox, [{
+    type: "dialog.response",
+    menuId: "settings",
+    menuGeneration: 7,
+    dialogId: "delete",
+    value: true
+  }]);
+  assert.equal(document.querySelector("dialog"), null);
+});
+
+test("selection dialogs support multiple selected values", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+
+  menu.feed({
+    type: "dialog.create",
+    menuId: "settings",
+    menuGeneration: 3,
+    dialog: {
+      id: "regions",
+      kind: "selection",
+      title: "Regions",
+      options: [
+        { value: "eu", label: "Europe", selected: true },
+        { value: "na", label: "North America" },
+        { value: "apac", label: "Asia Pacific", selected: true }
+      ],
+      multiple: true,
+      submitLabel: "Use regions"
+    }
+  });
+
+  const dialog = document.querySelector("dialog");
+  const select = dialog.querySelector("select");
+  assert.equal(select.multiple, true);
+  assert.deepEqual([...select.selectedOptions].map((option) => option.value), ["eu", "apac"]);
+  [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Use regions").click();
+
+  assert.deepEqual(outbox.at(-1).value, ["eu", "apac"]);
+});
+
+test("captcha dialogs render attached base64 images and return text input", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+
+  menu.feed({
+    type: "dialog.create",
+    menuId: "settings",
+    menuGeneration: 5,
+    dialog: {
+      id: "captcha-1",
+      kind: "captcha",
+      title: "<img src=x onerror=alert(1)>",
+      text: "Enter the text in the image.",
+      placeholder: "Captcha text",
+      resources: [{
+        id: "challenge",
+        mimeType: "image/png",
+        data: "cG5n",
+        alt: "Captcha challenge"
+      }]
+    }
+  });
+
+  const dialog = document.querySelector("dialog");
+  const image = dialog.querySelector("img");
+  const input = dialog.querySelector("input");
+  const submit = [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Submit");
+  assert.equal(dialog.querySelector("h2").textContent, "<img src=x onerror=alert(1)>");
+  assert.equal(dialog.querySelector("h2 img"), null);
+  assert.equal(image.src, "data:image/png;base64,cG5n");
+  assert.equal(image.alt, "Captcha challenge");
+  assert.equal(input.required, true);
+
+  submit.click();
+  assert.equal(outbox.length, 0);
+  input.value = "A7Bc";
+  submit.click();
+
+  assert.equal(outbox.length, 1);
+  assert.equal(outbox[0].dialogId, "captcha-1");
+  assert.equal(outbox[0].value, "A7Bc");
+});
+
+test("canceling a dialog sends one null response", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  const message = {
+    type: "dialog.create",
+    menuId: "settings",
+    menuGeneration: 2,
+    dialog: {
+      id: "choice",
+      kind: "selection",
+      title: "Choose",
+      options: [{ value: "a", label: "A" }]
+    }
+  };
+
+  menu.feed(message);
+  assert.equal(menu.feed(message), true);
+  assert.equal(document.querySelectorAll("dialog").length, 1);
+  const dialog = document.querySelector("dialog");
+  const cancel = new window.Event("cancel", { cancelable: true });
+  dialog.dispatchEvent(cancel);
+  dialog.dispatchEvent(new window.Event("close"));
+
+  assert.equal(cancel.defaultPrevented, true);
+  assert.equal(outbox.length, 1);
+  assert.equal(outbox[0].value, null);
+});
+
+test("ignores malformed dialog creation messages", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+
+  assert.equal(menu.feed({
+    type: "dialog.create",
+    menuId: "settings",
+    menuGeneration: 1,
+    dialog: {
+      id: "captcha",
+      kind: "captcha",
+      title: "Verify",
+      resources: [{ id: "challenge", mimeType: "image/png", data: "not base64" }]
+    }
+  }), false);
+  assert.equal(document.querySelector("dialog"), null);
 });

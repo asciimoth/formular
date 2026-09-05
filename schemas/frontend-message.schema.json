@@ -7,6 +7,7 @@
     { "$ref": "field-validate-message.schema.json" },
     { "$ref": "form-apply-message.schema.json" },
     { "$ref": "button-press-message.schema.json" },
-    { "$ref": "autocomplete-request-message.schema.json" }
+    { "$ref": "autocomplete-request-message.schema.json" },
+    { "$ref": "dialog-response-message.schema.json" }
   ]
 }

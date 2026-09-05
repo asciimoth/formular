@@ -282,6 +282,109 @@
         "copyable": { "$ref": "#/$defs/copyable" }
       }
     },
+    "dialogOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "label"],
+      "properties": {
+        "value": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "selected": { "type": "boolean", "default": false }
+      }
+    },
+    "dialogResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mimeType", "data"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "mimeType": { "type": "string", "minLength": 1 },
+        "data": {
+          "description": "Resource bytes encoded as standard base64 text.",
+          "type": "string",
+          "minLength": 1,
+          "contentEncoding": "base64"
+        },
+        "alt": { "type": "string" }
+      }
+    },
+    "dialog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": {
+          "type": "string",
+          "enum": ["yesno", "selection", "captcha"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "text": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dialogOption" }
+        },
+        "multiple": { "type": "boolean", "default": false },
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dialogResource" }
+        },
+        "placeholder": { "type": "string" },
+        "yesLabel": { "type": "string" },
+        "noLabel": { "type": "string" },
+        "submitLabel": { "type": "string" },
+        "cancelLabel": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "selection" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["options"],
+            "properties": { "options": { "minItems": 1 } }
+          },
+          "else": {
+            "properties": {
+              "options": { "maxItems": 0 },
+              "multiple": { "const": false }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "captcha" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["resources"],
+            "properties": {
+              "resources": {
+                "minItems": 1,
+                "contains": {
+                  "properties": {
+                    "mimeType": { "type": "string", "pattern": "^[Ii][Mm][Aa][Gg][Ee]/" }
+                  },
+                  "required": ["mimeType"]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "dialogResponseValue": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        { "type": "null" }
+      ]
+    },
     "block": {
       "type": "object",
       "additionalProperties": false,

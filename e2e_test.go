@@ -663,6 +663,8 @@ func validateFrontendMessage(msg any) error {
 		return m.Validate()
 	case formular.AutocompleteRequestMessage:
 		return m.Validate()
+	case formular.DialogResponseMessage:
+		return m.Validate()
 	default:
 		return errMalformed{}
 	}
@@ -683,6 +685,8 @@ func frontendMessageBase(msg any) formular.MessageBase {
 	case formular.ButtonPressMessage:
 		return m.MessageBase
 	case formular.AutocompleteRequestMessage:
+		return m.MessageBase
+	case formular.DialogResponseMessage:
 		return m.MessageBase
 	default:
 		return formular.MessageBase{}

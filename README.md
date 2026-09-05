@@ -2,6 +2,8 @@
 
 Formular is a JSON message DSL for backend-owned dynamic menus and forms that
 can be rendered by GUI, TUI, CLI, MCP, web, or other frontends.
+It also supports backend-requested one-shot yes/no, selection, and captcha
+dialogs through asynchronous messages.
 
 - Protocol and implementation notes: [docs/protocol.md](docs/protocol.md)
 - Browser frontend library: [docs/frontend-js.md](docs/frontend-js.md)
@@ -46,4 +48,3 @@ Files in this repository are distributed under the CC0 license.
   has waived all copyright and related or neighboring rights to
   <span property="dct:title">formular</span>.
 </p>
-

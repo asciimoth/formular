@@ -115,6 +115,50 @@ func BoolValue(v any) (bool, bool) {
 	return out, ok
 }
 
+// DialogSelectionValuesFromAny decodes a single-selection or
+// multiple-selection dialog result.
+//
+// A string becomes a one-item result. String slices and JSON-decoded arrays of
+// strings are copied into the returned slice. Other values return nil, false.
+func DialogSelectionValuesFromAny(v any) ([]string, bool) {
+	switch typed := v.(type) {
+	case string:
+		return []string{typed}, true
+	case []string:
+		return copySlice(typed), true
+	case []any:
+		out := make([]string, len(typed))
+		for i, value := range typed {
+			var ok bool
+			out[i], ok = value.(string)
+			if !ok {
+				return nil, false
+			}
+		}
+		return out, true
+	}
+
+	value := reflect.ValueOf(v)
+	for value.IsValid() && (value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface) {
+		if value.IsNil() {
+			return nil, false
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() || (value.Kind() != reflect.Slice && value.Kind() != reflect.Array) {
+		return nil, false
+	}
+	out := make([]string, value.Len())
+	for i := 0; i < value.Len(); i++ {
+		item, ok := value.Index(i).Interface().(string)
+		if !ok {
+			return nil, false
+		}
+		out[i] = item
+	}
+	return out, true
+}
+
 // ArrayElementValueFromAny decodes a single array element value from typed or
 // JSON-like data.
 //

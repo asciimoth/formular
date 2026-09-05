@@ -27,6 +27,18 @@ type FormHandler struct {
 	OnUpdate func(fieldID string, value any) error
 }
 
+// DialogHandler contains an optional callback for one-shot dialog responses.
+type DialogHandler struct {
+	// MenuID filters messages by menuId when non-empty.
+	MenuID string
+	// DialogID filters messages by dialogId when non-empty.
+	DialogID string
+
+	// OnResponse receives the dialog ID and result. A nil result means that the
+	// user canceled the dialog.
+	OnResponse func(dialogID string, value any) error
+}
+
 // DispatchFormMessage routes a frontend form message to a FormHandler.
 //
 // It returns handled=false for messages with a different menu or block, for
@@ -68,6 +80,63 @@ func DispatchFormMessage(msg Message, h FormHandler) (handled bool, err error) {
 	default:
 		return false, nil
 	}
+}
+
+// DispatchDialogMessage routes a frontend dialog.response message.
+//
+// It returns handled=false for messages with a different menu or dialog ID,
+// for unsupported message types, and for malformed JSON-like inputs. A
+// matching response is handled even when OnResponse is nil.
+func DispatchDialogMessage(msg Message, h DialogHandler) (handled bool, err error) {
+	switch typed := msg.(type) {
+	case DialogResponseMessage:
+		return dispatchDialogResponse(typed, h)
+	case *DialogResponseMessage:
+		if typed == nil {
+			return false, nil
+		}
+		return dispatchDialogResponse(*typed, h)
+	case json.RawMessage:
+		return dispatchDialogMessageJSON([]byte(typed), h)
+	case []byte:
+		return dispatchDialogMessageJSON(typed, h)
+	case map[string]any:
+		data, marshalErr := json.Marshal(typed)
+		if marshalErr != nil {
+			return false, marshalErr
+		}
+		return dispatchDialogMessageJSON(data, h)
+	default:
+		return false, nil
+	}
+}
+
+func dispatchDialogMessageJSON(data []byte, h DialogHandler) (bool, error) {
+	var base MessageBase
+	if err := json.Unmarshal(data, &base); err != nil {
+		return false, err
+	}
+	if base.Type != MessageDialogResponse {
+		return false, nil
+	}
+	var msg DialogResponseMessage
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return false, err
+	}
+	return dispatchDialogResponse(msg, h)
+}
+
+func dispatchDialogResponse(msg DialogResponseMessage, h DialogHandler) (bool, error) {
+	if h.MenuID != "" && h.MenuID != msg.MenuID {
+		return false, nil
+	}
+	if h.DialogID != "" && h.DialogID != msg.DialogID {
+		return false, nil
+	}
+	if h.OnResponse == nil {
+		return true, nil
+	}
+	return true, h.OnResponse(msg.DialogID, copyAny(msg.Value))
 }
 
 func dispatchFormMessageJSON(data []byte, h FormHandler) (bool, error) {

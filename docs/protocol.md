@@ -18,6 +18,8 @@ in-process calls, and similar channels are all valid.
 The protocol uses push semantics: either side may send a valid message whenever
 it has new state.
 Request/response transports can emulate this with e.g. long polling.
+Dialogs use the same transport. A backend sends `dialog.create`. The frontend
+sends one later `dialog.response` after the user answers or cancels.
 
 Every message must contain:
 - `type`: message kind.
@@ -249,8 +251,92 @@ For fields with `autocomplete.enabled: true`, the frontend may send `autocomplet
 
 Frontends may use autocomplete hints while the user types. They should ignore autocomplete hints for fields that are not currently focused. They should also ignore suggested values that do not have the current input state as a prefix.
 
+## One-Shot Dialogs
+
+A backend can request one modal user interaction with `dialog.create`.
+The dialog has an `id` that is unique among pending dialogs in the menu.
+The frontend sends at most one `dialog.response` for that ID and then removes
+the dialog. A repeated `dialog.create` with the same pending ID does not create
+another dialog.
+
+Dialog kinds are:
+
+- `yesno`: shows two actions and returns `true` for Yes or `false` for No.
+- `selection`: shows `options` and returns one option value. With
+  `multiple: true`, it returns an array of option values.
+- `captcha`: shows attached resources and a required text input. It returns the
+  entered string.
+
+All dialog kinds can include plain `text` and attached `resources`. A resource
+has an `id`, `mimeType`, optional `alt` text, and `data`. The `data` field is
+the resource bytes encoded as standard base64 text. A resource is always part
+of the `dialog.create` message. It is not a URL and the frontend must not fetch
+it from another location. Resource IDs and selection option values must be
+unique inside one dialog. A captcha must include at least one image resource.
+
+Selection options have separate backend values and user-facing labels:
+
+```json
+{
+  "value": "eu-central",
+  "label": "Europe (central)",
+  "selected": true
+}
+```
+
+The optional `selected` flag sets the initial selection. A single-selection
+dialog can have at most one selected option. If it has none, a frontend can
+select the first option. A multiple-selection dialog can return an empty array.
+
+Button labels can be changed with `yesLabel` and `noLabel` for a yes/no dialog,
+or `submitLabel` and `cancelLabel` for selection and captcha dialogs.
+`placeholder` sets captcha input placeholder text.
+
+When the user dismisses a dialog without an answer, such as with Escape or a
+Cancel button, the response value is `null`. Thus, No (`false`) and cancel
+(`null`) are different results.
+
+Example captcha request:
+
+```json
+{
+  "type": "dialog.create",
+  "menuId": "account",
+  "menuGeneration": 7,
+  "dialog": {
+    "id": "captcha-42",
+    "kind": "captcha",
+    "title": "Verify the request",
+    "text": "Enter the text in the image.",
+    "placeholder": "Captcha text",
+    "resources": [
+      {
+        "id": "challenge",
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAA...",
+        "alt": "Captcha challenge"
+      }
+    ]
+  }
+}
+```
+
+Example response:
+
+```json
+{
+  "type": "dialog.response",
+  "menuId": "account",
+  "menuGeneration": 7,
+  "dialogId": "captcha-42",
+  "value": "A7Bc"
+}
+```
+
 ## Backend Messages
-Backend-to-frontend messages are snapshots of their subject, not mutation diffs. The frontend compares the received snapshot with local view state and applies whatever UI changes are necessary.
+Menu-related backend-to-frontend messages are snapshots of their subject, not
+mutation diffs. The frontend compares a received snapshot with local view state
+and applies the necessary UI changes. `dialog.create` is a transient request.
 
 `menu.snapshot`
 
@@ -271,6 +357,12 @@ Updates validation state, status text, or readonly flag for one field. Frontends
 `autocomplete.hints`
 
 Provides complete candidate values for a focused text field. Frontends should ignore hints for fields that are not currently focused and hints whose values do not start with the current input prefix.
+
+`dialog.create`
+
+Requests one modal yes/no, selection, or captcha interaction. Resources are
+embedded as base64 text. Dialog messages are transient and are not part of a
+menu snapshot.
 
 ## Frontend Messages
 Frontend-to-backend messages describe user input or frontend requests for the active menu. Backends should ignore messages for unknown menu IDs, stale menus they no longer serve, malformed messages, or messages that fail semantic validation.
@@ -295,6 +387,11 @@ Sent when a declared button is activated. For buttons inside array elements, `el
 
 Optional request sent for focused autocomplete-enabled fields. The backend may answer with `autocomplete.hints`.
 
+`dialog.response`
+
+Returns the result of one `dialog.create`. The response has the same `dialogId`.
+Its `value` is a boolean, string, string array, or `null` for cancel.
+
 ## Frontend Behavior
 Frontends should:
 
@@ -304,6 +401,8 @@ Frontends should:
 - Keep collapse state local unless a forced menu snapshot arrives.
 - Ignore backend messages without `menuId` or with an unknown `menuId`.
 - Ignore autocomplete hints that are unrelated to the currently focused input.
+- Show `dialog.create` requests as modal dialogs and send no more than one
+  response for each dialog ID.
 - Prevent user input in inactive blocks, readonly fields, and inactive buttons.
 - Prevent form apply when required fields are empty.
 - Prevent form apply when validation-enabled fields have not received backend `ok`.
@@ -321,6 +420,7 @@ Backends should:
 - Increment menu and block generations consistently.
 - Prefer smaller independently updated blocks over one large block when state changes frequently.
 - Resend `menu.snapshot` with `force: true` when frontend state must be reset.
+- Use a new dialog ID for each one-shot request and validate each dialog result.
 
 The backend is authoritative in conflicts. Multiple frontends may interact with the same menu concurrently.
 
@@ -331,10 +431,18 @@ When a backend message changes block membership or array element membership insi
 
 Frontend messages include the generations the frontend saw when the user acted. The backend may reject, ignore, or reconcile stale frontend actions according to application policy.
 
+A `dialog.response` echoes the `menuGeneration` from its `dialog.create`.
+The backend can use the dialog ID as the primary correlation key.
+
 ## Security
 Neither side should trust the other. Validate schemas and semantic constraints.
 
 Backends must validate array field values against their declared templates. Web frontends must sanitize markdown, links, code labels, status text, help text, and any other backend-provided text before inserting it into the DOM. File payloads should be size-limited before decoding and should not be executed or trusted based on client-provided MIME type.
+
+Dialog resources are also untrusted. Backends should limit their encoded and
+decoded size. Frontends should not execute attached data. They should render
+text with safe DOM text operations and use the declared MIME type only as a
+display hint.
 
 ## Minimal Example
 ```json

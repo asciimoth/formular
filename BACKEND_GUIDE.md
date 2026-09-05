@@ -2,6 +2,8 @@
 Formular is a JSON message protocol for backend-owned menus and forms.
 The backend describes the current menu state, the frontend renders it, and user
 actions come back as protocol messages.
+The backend can also request transient modal dialogs through the same message
+channel.
 This guide focuses only on backend-side menu logic: which messages to send,
 which messages to handle, and what value shapes to expect.
 
@@ -13,8 +15,9 @@ Small Go snippets are included only to show how the same shape maps to the
 [asciimoth/formular](github.com/asciimoth/formular) wire types.
 
 ## Snapshots, not patches
-Backend-to-frontend messages are snapshots of a menu, a block, a field status,
-or autocomplete hints.
+Menu-related backend-to-frontend messages are snapshots of a menu, a block, a
+field status, or autocomplete hints. A dialog creation is a transient request,
+not snapshot state.
 Do not send small mutation diffs such as “rename this field” or “append this item”.
 Instead, rebuild the affected menu or block and send the whole snapshot for that
 subject.
@@ -28,6 +31,7 @@ The usual backend message types are:
 | `block.delete`       | Remove one block.                                     |
 | `field.status`       | Update field validation status and/or readonly state. |
 | `autocomplete.hints` | Send possible completions for a focused text field.   |
+| `dialog.create`      | Request one modal user interaction.                   |
 
 The usual frontend message types are:
 
@@ -38,6 +42,7 @@ The usual frontend message types are:
 | `form.apply`           | Submit all values from a form block.                        |
 | `button.press`         | A declared button was pressed.                              |
 | `autocomplete.request` | Request completions for an autocomplete-enabled text field. |
+| `dialog.response`      | Return one requested dialog result or cancellation.        |
 
 Every message belongs to one menu instance via `menuId`.
 Generations are backend-assigned numbers that let frontends ignore stale state:
@@ -516,6 +521,146 @@ Set `inactive: true` on a button to render it disabled:
 ```json
 { "type": "button", "id": "send", "label": "Send", "inactive": true }
 ```
+
+## Request a one-shot dialog
+
+Dialogs use the normal bidirectional message channel. Do not block the
+transport while you wait for user input. Send `dialog.create`, keep any
+application continuation in backend state, and resume it when the matching
+`dialog.response` arrives.
+
+Each pending dialog needs a unique `id` in its menu. The frontend sends at most
+one response and removes the dialog. Use a new ID for a new request.
+
+### Ask a yes/no question
+
+```json
+{
+  "type": "dialog.create",
+  "menuId": "node-42",
+  "menuGeneration": 3,
+  "dialog": {
+    "id": "delete-node-42",
+    "kind": "yesno",
+    "title": "Delete node?",
+    "text": "This action cannot be undone.",
+    "yesLabel": "Delete",
+    "noLabel": "Keep"
+  }
+}
+```
+
+Yes returns `true` and No returns `false`. Dismissing the dialog with Escape
+returns `null`.
+
+The Go constructors produce the same message:
+
+```go
+dialog := formular.YesNoDialog(
+    "delete-node-42",
+    "Delete node?",
+    "This action cannot be undone.",
+)
+dialog.YesLabel = "Delete"
+dialog.NoLabel = "Keep"
+send(formular.DialogCreate("node-42", menuGeneration, dialog))
+```
+
+### Request a selection
+
+```go
+dialog := formular.SelectionDialog(
+    "region",
+    "Select a region",
+    "Choose where to create the service.",
+    formular.DialogOption{Value: "eu", Label: "Europe", Selected: true},
+    formular.DialogOption{Value: "na", Label: "North America"},
+)
+send(formular.DialogCreate("node-42", menuGeneration, dialog))
+```
+
+A single selection returns an option `value` as a string. Set
+`dialog.Multiple = true` to permit multiple selections. The response then
+contains a string array. The frontend shows `label` to the user and returns
+`value` to the backend.
+
+### Request simple captcha input
+
+A captcha dialog must contain at least one attached image. Encode the image in
+the creation message. Do not send an image URL.
+
+```go
+image := formular.DialogResourceFromBytes(
+    "challenge",
+    "image/png",
+    "Captcha challenge",
+    captchaPNG,
+)
+dialog := formular.CaptchaDialog(
+    "captcha-42",
+    "Verify the request",
+    "Enter the text in the image.",
+    image,
+)
+dialog.Placeholder = "Captcha text"
+send(formular.DialogCreate("node-42", menuGeneration, dialog))
+```
+
+`DialogResourceFromBytes` uses standard base64 encoding. If you build
+`DialogResource` directly, put base64 text in `Data`. Resources can be used
+with all dialog kinds. Each resource stays inside the `dialog.create` message.
+
+A captcha answer is a string. Validate it on the backend. Attached resource
+data and MIME types are also untrusted input boundaries. Limit resource size
+before you send or decode data.
+
+### Handle the response
+
+```json
+{
+  "type": "dialog.response",
+  "menuId": "node-42",
+  "menuGeneration": 3,
+  "dialogId": "delete-node-42",
+  "value": true
+}
+```
+
+The Go dispatcher accepts typed messages, JSON bytes, raw JSON, and decoded
+maps:
+
+```go
+handled, err := formular.DispatchDialogMessage(message, formular.DialogHandler{
+    MenuID:   "node-42",
+    DialogID: "delete-node-42",
+    OnResponse: func(dialogID string, value any) error {
+        confirmed, ok := value.(bool)
+        if !ok {
+            return nil // Canceled or malformed for this expected dialog kind.
+        }
+        if confirmed {
+            deleteNode()
+        }
+        return nil
+    },
+})
+```
+
+The result shape depends on the requested kind:
+
+| Kind        | Result                                                    |
+| ----------- | --------------------------------------------------------- |
+| `yesno`     | `bool`                                                    |
+| `selection` | `string`, or `[]string` for multiple selection            |
+| `captcha`   | `string`                                                   |
+| Any kind    | `nil` when the user cancels                               |
+
+Use `BoolValue` for yes/no results and `StringValue` for captcha or
+single-selection results. Use `DialogSelectionValuesFromAny` when one code
+path must accept both single and multiple selections. It converts a string to
+a one-item slice and also normalizes arrays decoded by `encoding/json`.
+
+Treat a response with an unknown or completed `dialogId` as stale input.
 
 ## Use file inputs
 File fields upload file content as base64 text in the JSON value.
@@ -1070,6 +1215,8 @@ func receive(message any) error {
         return handleButtonPress(msg)
     case formular.AutocompleteRequestMessage:
         return handleAutocomplete(msg)
+    case formular.DialogResponseMessage:
+        return handleDialogResponse(msg)
     default:
         return nil
     }

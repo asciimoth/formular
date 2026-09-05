@@ -66,6 +66,15 @@ const DEFAULT_THEME = `
 .formular-element-header{align-items:center;border-bottom:1px solid #313244;display:flex;justify-content:space-between;padding:8px 10px}
 .formular-element-body{display:flex;flex-direction:column;gap:10px;padding:10px}
 .formular-form-actions{border-top:1px solid #313244;justify-content:flex-end;padding-top:12px}
+.formular-dialog{background:#181825;border:1px solid #45475a;border-radius:10px;color:#cdd6f4;font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-height:calc(100vh - 32px);max-width:min(520px,calc(100vw - 32px));padding:0;width:100%}
+.formular-dialog::backdrop{background:rgba(17,17,27,.72)}
+.formular-dialog-form{display:flex;flex-direction:column;gap:14px;padding:18px}
+.formular-dialog-title{color:#f5e0dc;font-size:1.15rem;margin:0}
+.formular-dialog-text{margin:0;white-space:pre-wrap}
+.formular-dialog-resources{display:flex;flex-direction:column;gap:10px}
+.formular-dialog-resource{margin:0}
+.formular-dialog-resource-image{display:block;height:auto;max-height:45vh;max-width:100%;object-fit:contain}
+.formular-dialog-actions{display:flex;gap:8px;justify-content:flex-end}
 `;
 
 function ensureDefaultTheme(prefix) {
@@ -128,6 +137,51 @@ function isTextLikeField(field) {
 function localElementNumber(id) {
   const match = String(id || "").match(/^local-(\d+)$/);
   return match ? Number.parseInt(match[1], 10) : 0;
+}
+
+function isBase64(value) {
+  return typeof value === "string"
+    && value.length > 0
+    && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value);
+}
+
+function isDialogSpec(spec) {
+  if (!spec || typeof spec.id !== "string" || !spec.id || typeof spec.title !== "string" || !spec.title) return false;
+  if (!["yesno", "selection", "captcha"].includes(spec.kind)) return false;
+
+  const resources = spec.resources ?? [];
+  if (!Array.isArray(resources)) return false;
+  const resourceIDs = new Set();
+  for (const resource of resources) {
+    if (
+      !resource
+      || typeof resource.id !== "string"
+      || !resource.id
+      || resourceIDs.has(resource.id)
+      || typeof resource.mimeType !== "string"
+      || !resource.mimeType
+      || !isBase64(resource.data)
+    ) return false;
+    resourceIDs.add(resource.id);
+  }
+
+  if (spec.kind === "selection") {
+    if (!Array.isArray(spec.options) || spec.options.length === 0) return false;
+    const values = new Set();
+    let selected = 0;
+    for (const option of spec.options) {
+      if (!option || typeof option.value !== "string" || !option.value || typeof option.label !== "string" || !option.label) return false;
+      if (values.has(option.value)) return false;
+      values.add(option.value);
+      if (option.selected) selected += 1;
+    }
+    if (!spec.multiple && selected > 1) return false;
+  } else if (spec.options?.length || spec.multiple) {
+    return false;
+  }
+
+  return spec.kind !== "captcha"
+    || resources.some((resource) => resource.mimeType.toLowerCase().startsWith("image/"));
 }
 
 function renderMarkdownInline(input) {
@@ -210,6 +264,8 @@ export class FormularMenu {
     this.removedArrayElementIDs = new Map();
     this.focusedField = null;
     this.localElementCounter = 0;
+    this.dialogCounter = 0;
+    this.dialogs = new Map();
     this.destroyed = false;
     if (this.defaultTheme) ensureDefaultTheme(this.prefix);
     this.node.classList.add(css(this.prefix, "root"));
@@ -261,6 +317,7 @@ export class FormularMenu {
       this.applyAutocompleteHints(message);
       return true;
     }
+    if (message.type === "dialog.create") return this.openDialog(message);
     return false;
   }
 
@@ -268,6 +325,7 @@ export class FormularMenu {
     if (this.destroyed) return;
     this.destroyed = true;
     this.observer?.disconnect();
+    this.dialogs.clear();
     this.node.classList.remove(css(this.prefix, "root"));
     this.node.replaceChildren();
   }
@@ -290,6 +348,162 @@ export class FormularMenu {
       menuGeneration: this.menuGeneration,
       blockGeneration: block?.generation || 0
     };
+  }
+
+  openDialog(message) {
+    const spec = message.dialog;
+    if (!isDialogSpec(spec)) return false;
+    if (this.dialogs.has(spec.id)) return true;
+
+    const dialog = document.createElement("dialog");
+    dialog.className = css(this.prefix, "dialog");
+    dialog.dataset.dialogId = spec.id;
+    const form = document.createElement("form");
+    form.method = "dialog";
+    form.className = css(this.prefix, "dialog-form");
+    let submitDialog = null;
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitDialog?.();
+    });
+
+    const title = document.createElement("h2");
+    title.id = `${this.prefix}-dialog-title-${++this.dialogCounter}`;
+    title.className = css(this.prefix, "dialog-title");
+    title.textContent = text(spec.title);
+    dialog.setAttribute("aria-labelledby", title.id);
+    form.append(title);
+
+    if (spec.text) {
+      const body = document.createElement("p");
+      body.className = css(this.prefix, "dialog-text");
+      body.textContent = text(spec.text);
+      form.append(body);
+    }
+
+    if (spec.resources?.length) {
+      const resources = document.createElement("div");
+      resources.className = css(this.prefix, "dialog-resources");
+      for (const resource of spec.resources) resources.append(this.renderDialogResource(resource));
+      form.append(resources);
+    }
+
+    let result = null;
+    let control = null;
+    if (spec.kind === "selection") {
+      control = document.createElement("select");
+      control.className = css(this.prefix, "select");
+      control.multiple = Boolean(spec.multiple);
+      if (control.multiple) control.size = Math.min(Math.max(spec.options.length, 2), 8);
+      for (const choice of spec.options) {
+        const option = document.createElement("option");
+        option.value = text(choice.value);
+        option.textContent = text(choice.label || choice.value);
+        option.selected = Boolean(choice.selected);
+        control.append(option);
+      }
+      form.append(control);
+      result = () => control.multiple
+        ? [...control.selectedOptions].map((option) => option.value)
+        : control.value;
+    } else if (spec.kind === "captcha") {
+      control = document.createElement("input");
+      control.type = "text";
+      control.className = css(this.prefix, "control");
+      control.required = true;
+      control.autocomplete = "off";
+      control.spellcheck = false;
+      control.placeholder = text(spec.placeholder);
+      control.setAttribute("aria-label", "Captcha response");
+      form.append(control);
+      result = () => control.value;
+    }
+
+    const actions = document.createElement("div");
+    actions.className = css(this.prefix, "dialog-actions");
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      this.dialogs.delete(spec.id);
+      this.send({
+        type: "dialog.response",
+        menuId: this.menuId,
+        menuGeneration: message.menuGeneration ?? this.menuGeneration,
+        dialogId: spec.id,
+        value
+      });
+      try {
+        if (dialog.open && typeof dialog.close === "function") dialog.close();
+      } catch {
+        // The dialog can already be closing after a native cancel action.
+      }
+      dialog.remove();
+    };
+
+    if (spec.kind === "yesno") {
+      submitDialog = () => finish(true);
+      actions.append(
+        this.dialogActionButton(spec.noLabel || "No", () => finish(false)),
+        this.dialogActionButton(spec.yesLabel || "Yes", null, true)
+      );
+    } else {
+      submitDialog = () => {
+        if (spec.kind === "captcha" && !control.value) {
+          control.reportValidity?.();
+          return;
+        }
+        finish(result());
+      };
+      actions.append(this.dialogActionButton(spec.cancelLabel || "Cancel", () => finish(null)));
+      actions.append(this.dialogActionButton(spec.submitLabel || "Submit", null, true));
+    }
+
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      finish(null);
+    });
+    dialog.addEventListener("close", () => finish(null));
+    form.append(actions);
+    dialog.append(form);
+    this.dialogs.set(spec.id, dialog);
+    this.node.append(dialog);
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    control?.focus();
+    return true;
+  }
+
+  renderDialogResource(resource) {
+    const wrapper = document.createElement("figure");
+    wrapper.className = css(this.prefix, "dialog-resource");
+    const mimeType = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/.test(resource?.mimeType || "")
+      ? resource.mimeType
+      : "application/octet-stream";
+    const source = `data:${mimeType};base64,${text(resource?.data)}`;
+    if (mimeType.toLowerCase().startsWith("image/")) {
+      const image = document.createElement("img");
+      image.className = css(this.prefix, "dialog-resource-image");
+      image.src = source;
+      image.alt = text(resource?.alt);
+      wrapper.append(image);
+      return wrapper;
+    }
+    const link = document.createElement("a");
+    link.href = source;
+    link.download = text(resource?.id || "resource");
+    link.textContent = resource?.alt || `Download ${resource?.id || "resource"}`;
+    wrapper.append(link);
+    return wrapper;
+  }
+
+  dialogActionButton(label, action, submit = false) {
+    const button = document.createElement("button");
+    button.type = submit ? "submit" : "button";
+    button.className = css(this.prefix, "button");
+    button.textContent = label;
+    if (action) button.addEventListener("click", action);
+    return button;
   }
 
   render() {

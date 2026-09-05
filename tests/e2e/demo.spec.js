@@ -17,6 +17,33 @@ test("demo boots Go WASM backend and renders both menus", async ({ page }) => {
   await expect(page.getByText("Activity log")).toBeVisible();
 });
 
+test("demo dialogs complete backend message round trips", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+  const left = page.locator("#left-menu");
+
+  await left.getByRole("button", { name: "Yes/no dialog" }).click();
+  let dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("This yes/no dialog returns a boolean result.");
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(left.getByText("Yes/no result: continue")).toBeVisible();
+
+  await left.getByRole("button", { name: "Selection dialog" }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.locator("select").selectOption(["go", "javascript"]);
+  await dialog.getByRole("button", { name: "Use selection" }).click();
+  await expect(left.getByText("Selection result: go, javascript")).toBeVisible();
+
+  await left.getByRole("button", { name: "Captcha dialog" }).click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.locator("img")).toHaveAttribute("src", /^data:image\/svg\+xml;base64,/);
+  await dialog.getByLabel("Captcha response").fill("4m7k");
+  await dialog.getByRole("button", { name: "Submit" }).click();
+  await expect(left.getByText("Captcha result: correct")).toBeVisible();
+
+  await expect(page.getByText(/frontend -> middleware dialog\.response/).first()).toBeVisible();
+});
+
 test("validated text input keeps focus while backend statuses arrive", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

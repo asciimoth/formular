@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 )
 
 // ValidationError describes one invalid field in a Formular structure.
@@ -117,6 +118,14 @@ func (m AutocompleteHintsMessage) Validate() error {
 	return v.err()
 }
 
+// Validate returns an error if m is not a valid dialog creation message.
+func (m DialogCreateMessage) Validate() error {
+	var v validator
+	v.messageBase("message", m.MessageBase, MessageDialogCreate)
+	v.dialog("message.dialog", m.Dialog)
+	return v.err()
+}
+
 // Validate returns an error if m is not a valid field update message.
 func (m FieldUpdateMessage) Validate() error {
 	var v validator
@@ -162,6 +171,36 @@ func (m AutocompleteRequestMessage) Validate() error {
 	var v validator
 	v.messageBase("message", m.MessageBase, MessageAutocompleteRequest)
 	v.fieldRef("message.field", m.Field)
+	return v.err()
+}
+
+// Validate returns an error if m is not a valid dialog response message.
+func (m DialogResponseMessage) Validate() error {
+	var v validator
+	v.messageBase("message", m.MessageBase, MessageDialogResponse)
+	v.requiredID("message.dialogId", m.DialogID)
+	v.dialogResponseValue("message.value", m.Value)
+	return v.err()
+}
+
+// Validate returns an error if d is not a valid dialog description.
+func (d Dialog) Validate() error {
+	var v validator
+	v.dialog("dialog", d)
+	return v.err()
+}
+
+// Validate returns an error if o is not a valid dialog option.
+func (o DialogOption) Validate() error {
+	var v validator
+	v.dialogOption("dialogOption", o)
+	return v.err()
+}
+
+// Validate returns an error if r is not a valid attached dialog resource.
+func (r DialogResource) Validate() error {
+	var v validator
+	v.dialogResource("dialogResource", r)
 	return v.err()
 }
 
@@ -264,6 +303,121 @@ func (v *validator) messageBase(path string, m MessageBase, wantType string) {
 		v.requiredID(path+".type", m.Type)
 	}
 	v.requiredID(path+".menuId", m.MenuID)
+}
+
+func (v *validator) dialog(path string, dialog Dialog) {
+	v.requiredID(path+".id", dialog.ID)
+	v.dialogKind(path+".kind", dialog.Kind)
+	if dialog.Title == "" {
+		v.add(path+".title", "must not be empty")
+	}
+
+	optionValues := map[string]int{}
+	selected := 0
+	for i, option := range dialog.Options {
+		optionPath := indexPath(path+".options", i)
+		if prev, ok := optionValues[option.Value]; ok && option.Value != "" {
+			v.add(optionPath+".value", fmt.Sprintf("duplicates %s.value", indexPath(path+".options", prev)))
+		}
+		optionValues[option.Value] = i
+		v.dialogOption(optionPath, option)
+		if option.Selected {
+			selected++
+		}
+	}
+
+	resourceIDs := map[string]int{}
+	hasImage := false
+	for i, resource := range dialog.Resources {
+		resourcePath := indexPath(path+".resources", i)
+		if prev, ok := resourceIDs[resource.ID]; ok && resource.ID != "" {
+			v.add(resourcePath+".id", fmt.Sprintf("duplicates %s.id", indexPath(path+".resources", prev)))
+		}
+		resourceIDs[resource.ID] = i
+		v.dialogResource(resourcePath, resource)
+		if strings.HasPrefix(strings.ToLower(resource.MIMEType), "image/") {
+			hasImage = true
+		}
+	}
+
+	switch dialog.Kind {
+	case DialogKindYesNo:
+		if len(dialog.Options) > 0 {
+			v.add(path+".options", "is only valid for selection dialogs")
+		}
+		if dialog.Multiple {
+			v.add(path+".multiple", "is only valid for selection dialogs")
+		}
+		if dialog.Placeholder != "" {
+			v.add(path+".placeholder", "is only valid for captcha dialogs")
+		}
+	case DialogKindSelection:
+		if len(dialog.Options) == 0 {
+			v.add(path+".options", "must contain at least one option for selection dialogs")
+		}
+		if !dialog.Multiple && selected > 1 {
+			v.add(path+".options", "must not contain more than one selected option for single-selection dialogs")
+		}
+		if dialog.Placeholder != "" {
+			v.add(path+".placeholder", "is only valid for captcha dialogs")
+		}
+	case DialogKindCaptcha:
+		if len(dialog.Options) > 0 {
+			v.add(path+".options", "is only valid for selection dialogs")
+		}
+		if dialog.Multiple {
+			v.add(path+".multiple", "is only valid for selection dialogs")
+		}
+		if !hasImage {
+			v.add(path+".resources", "must contain at least one image for captcha dialogs")
+		}
+	}
+}
+
+func (v *validator) dialogOption(path string, option DialogOption) {
+	if option.Value == "" {
+		v.add(path+".value", "must not be empty")
+	}
+	if option.Label == "" {
+		v.add(path+".label", "must not be empty")
+	}
+}
+
+func (v *validator) dialogResource(path string, resource DialogResource) {
+	v.requiredID(path+".id", resource.ID)
+	if resource.MIMEType == "" {
+		v.add(path+".mimeType", "must not be empty")
+	}
+	if resource.Data == "" {
+		v.add(path+".data", "must not be empty")
+		return
+	}
+	if _, err := base64.StdEncoding.DecodeString(resource.Data); err != nil {
+		v.add(path+".data", "must be valid base64")
+	}
+}
+
+func (v *validator) dialogResponseValue(path string, value any) {
+	switch typed := value.(type) {
+	case nil, bool, string:
+	case []string:
+		for i, item := range typed {
+			if item == "" {
+				v.add(indexPath(path, i), "must not be empty")
+			}
+		}
+	case []any:
+		for i, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				v.add(indexPath(path, i), "must be a string")
+			} else if text == "" {
+				v.add(indexPath(path, i), "must not be empty")
+			}
+		}
+	default:
+		v.add(path, "must be a boolean, string, string array, or null")
+	}
 }
 
 func (v *validator) blocks(path string, blocks []Block) {
@@ -826,6 +980,14 @@ func (v *validator) fieldKind(path, value string) {
 	case FieldText, FieldInt, FieldFloat, FieldFile, FieldCheckbox, FieldRadio, FieldRange, FieldArray:
 	default:
 		v.add(path, "must be one of text, int, float, file, checkbox, radio, range, array")
+	}
+}
+
+func (v *validator) dialogKind(path, value string) {
+	switch value {
+	case DialogKindYesNo, DialogKindSelection, DialogKindCaptcha:
+	default:
+		v.add(path, "must be one of yesno, selection, captcha")
 	}
 }
 

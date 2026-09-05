@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asciimoth.github.io/formular/schemas/dialog-response-message.schema.json",
+  "title": "Frontend Dialog Response Message",
+  "allOf": [
+    { "$ref": "common.schema.json#/$defs/messageBase" },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "menuId", "menuGeneration", "dialogId", "value"],
+      "properties": {
+        "type": { "const": "dialog.response" },
+        "menuId": { "$ref": "common.schema.json#/$defs/menuId" },
+        "menuGeneration": { "$ref": "common.schema.json#/$defs/generation" },
+        "dialogId": { "$ref": "common.schema.json#/$defs/id" },
+        "value": { "$ref": "common.schema.json#/$defs/dialogResponseValue" }
+      }
+    }
+  ]
+}
