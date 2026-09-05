@@ -273,6 +273,150 @@ test("resolves state sources across blocks and inside array elements", () => {
   assert.equal(certificate.hidden, false);
 });
 
+test("inherits template conditions into backend-provided array elements", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const templateItems = [
+    { type: "field", id: "host", kind: "text", label: "Host", value: "localhost" },
+    { type: "field", id: "tls", kind: "checkbox", label: "TLS", value: false },
+    {
+      type: "field",
+      id: "certificate",
+      kind: "text",
+      label: "Certificate",
+      value: "",
+      stateConditions: {
+        visible: { source: { fieldId: "tls" }, operator: "equals", value: true }
+      }
+    },
+    {
+      type: "button",
+      id: "ping",
+      label: "Ping",
+      stateConditions: {
+        readonly: { source: { fieldId: "host" }, operator: "equals", value: "locked" }
+      }
+    }
+  ];
+  const elementItems = (host, tls) => [
+    { type: "field", id: "host", kind: "text", label: "Host", value: host },
+    { type: "field", id: "tls", kind: "checkbox", label: "TLS", value: tls },
+    { type: "field", id: "certificate", kind: "text", label: "Certificate", value: "" },
+    { type: "button", id: "ping", label: "Ping" }
+  ];
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "content",
+      order: 1,
+      generation: 1,
+      form: true,
+      items: [{
+        type: "field",
+        id: "servers",
+        kind: "array",
+        label: "Servers",
+        templates: [{ name: "http", items: templateItems }],
+        elements: [
+          { id: "server-1", template: "http", items: elementItems("localhost", false) },
+          { id: "server-2", template: "http", items: elementItems("locked", true) }
+        ]
+      }]
+    }]
+  });
+
+  const elements = [...document.querySelectorAll(".formular-element")];
+  const item = (element, id) => element.querySelector(`[data-formular-item-id='${id}']`);
+  assert.equal(item(elements[0], "certificate").hidden, true);
+  assert.equal(item(elements[0], "ping").disabled, false);
+  assert.equal(item(elements[1], "certificate").hidden, false);
+  assert.equal(item(elements[1], "ping").disabled, true);
+
+  const firstTLS = item(elements[0], "tls").querySelector("input");
+  firstTLS.checked = true;
+  firstTLS.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(item(elements[0], "certificate").hidden, false);
+  assert.equal(item(elements[1], "certificate").hidden, false);
+
+  const secondTLS = item(elements[1], "tls").querySelector("input");
+  secondTLS.checked = false;
+  secondTLS.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(item(elements[0], "certificate").hidden, false);
+  assert.equal(item(elements[1], "certificate").hidden, true);
+});
+
+test("evaluates state conditions in frontend-created array elements", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "content",
+      order: 1,
+      generation: 1,
+      form: true,
+      items: [{
+        type: "field",
+        id: "servers",
+        kind: "array",
+        label: "Servers",
+        elements: [],
+        templates: [{
+          name: "http",
+          items: [
+            { type: "field", id: "host", kind: "text", label: "Host", value: "localhost" },
+            { type: "field", id: "tls", kind: "checkbox", label: "TLS", value: false },
+            {
+              type: "field",
+              id: "certificate",
+              kind: "text",
+              label: "Certificate",
+              value: "",
+              stateConditions: {
+                visible: { source: { fieldId: "tls" }, operator: "equals", value: true }
+              }
+            },
+            {
+              type: "button",
+              id: "ping",
+              label: "Ping",
+              stateConditions: {
+                readonly: { source: { fieldId: "host" }, operator: "equals", value: "locked" }
+              }
+            }
+          ]
+        }]
+      }]
+    }]
+  });
+
+  document.querySelector("button[title='Add element']").click();
+  const element = document.querySelector(".formular-element");
+  const item = (id) => element.querySelector(`[data-formular-item-id='${id}']`);
+  const host = item("host").querySelector("input");
+  const tls = item("tls").querySelector("input");
+  const certificate = item("certificate");
+  const ping = item("ping");
+
+  assert.match(element.textContent, /Servers: local-1/);
+  assert.equal(certificate.hidden, true);
+  assert.equal(ping.disabled, false);
+
+  tls.checked = true;
+  tls.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(certificate.hidden, false);
+
+  host.value = "locked";
+  host.dispatchEvent(new window.Event("input", { bubbles: true }));
+  assert.equal(ping.disabled, true);
+  assert.equal(outbox.length, 0, "array element rules in a form must stay frontend-only");
+});
+
 test("multiline text fields do not wrap and expand to fit their content", async () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

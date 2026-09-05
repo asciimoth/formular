@@ -904,6 +904,13 @@ An array field has:
 - `elements`: current rendered element snapshots.
 - A value shape sent back as an array of `{ id, template, values }` objects.
 
+State conditions can use sibling fields in the same array element. Put the
+conditions on template items so one declaration works in frontend-created and
+backend-provided elements. The frontend matches an element item to its template
+item by `id`. A condition on an element item overrides the same condition from
+the template. The web demo's HTTP server template uses `tls` to show its
+certificate field and `host` to disable its Ping button.
+
 Example: a format string made from text parts and value placeholders.
 
 ```json

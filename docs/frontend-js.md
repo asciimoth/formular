@@ -148,6 +148,12 @@ a top-level source field in another block. See [the protocol
 specification](protocol.md#frontend-item-state-conditions) for operators,
 Boolean composition, missing-source behavior, and form submission rules.
 
+The web demo uses relative sources in the Servers array. TLS shows the
+certificate field in the same server element. A Host value of `locked`
+disables that element's Ping button. Both rules are declared only in the HTTP
+server template. The renderer applies them to backend-provided server items by
+matching item IDs, and it clones them into new frontend-created HTTP servers.
+
 ## Dialogs
 
 The browser frontend supports `yesno`, `selection`, and `captcha` dialogs.

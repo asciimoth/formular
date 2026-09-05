@@ -339,6 +339,41 @@ Array fields contain element templates and current elements.
 
 Templates have names unique within the array field. Elements declare the template they are based on. Element content is block-like but cannot contain headers, nested array fields, or form behavior.
 
+Items in templates and elements can have `stateConditions`. A relative source
+resolves to a sibling field in the same element. When the frontend creates an
+element from a template, it copies and evaluates the template item conditions.
+For a backend-provided element, the frontend matches items by `id` and applies
+conditions from the named template. An element item can override `visible` or
+`readonly` by declaring that condition in its own snapshot.
+
+For example, this template makes each `certificate` item depend on the `tls`
+field in that same element:
+
+```json
+{
+  "name": "http",
+  "items": [
+    { "type": "field", "id": "tls", "kind": "checkbox", "label": "TLS", "value": false },
+    {
+      "type": "field",
+      "id": "certificate",
+      "kind": "text",
+      "label": "Certificate",
+      "stateConditions": {
+        "visible": {
+          "source": { "fieldId": "tls" },
+          "operator": "equals",
+          "value": true
+        }
+      }
+    }
+  ]
+}
+```
+
+The source has no `blockId`, so each element evaluates the rule with its own
+`tls` value. A change in one element does not change another element's state.
+
 Frontends should provide controls for adding and removing elements. If an array field has multiple templates, adding an element should include template selection.
 
 Only the whole containing block can be a form. Array elements are never forms by themselves.

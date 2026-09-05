@@ -307,6 +307,36 @@ test("backend validation demo updates field status from radio changes", async ({
   await expect(page.getByLabel("Backend validated input")).toHaveValue("Change the radio below");
 });
 
+test("array element state conditions work for snapshots and new template elements", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const array = page.locator("#right-menu .formular-array");
+  const server = array.locator(".formular-element").filter({ hasText: "Servers: server-1" });
+  const serverCertificate = server.locator("[data-formular-item-id='certificate']");
+  const serverTLS = server.locator("[data-formular-item-id='tls'] input[type='checkbox']");
+  await expect(serverCertificate).toBeHidden();
+  await expect(server.getByRole("button", { name: "Ping" })).toBeEnabled();
+
+  await serverTLS.check();
+  await expect(serverCertificate).toBeVisible();
+  await server.getByLabel("Host").fill("locked");
+  await expect(server.getByRole("button", { name: "Ping" })).toBeDisabled();
+
+  await array.locator(".formular-array-actions select").selectOption("http");
+  await array.getByRole("button", { name: "+" }).click();
+  const local = array.locator(".formular-element").filter({ hasText: "Servers: local-1" });
+  const localCertificate = local.locator("[data-formular-item-id='certificate']");
+  const localTLS = local.locator("[data-formular-item-id='tls'] input[type='checkbox']");
+  await expect(localCertificate).toBeHidden();
+  await expect(local.getByRole("button", { name: "Ping" })).toBeEnabled();
+
+  await localTLS.check();
+  await expect(localCertificate).toBeVisible();
+  await local.getByLabel("Host").fill("locked");
+  await expect(local.getByRole("button", { name: "Ping" })).toBeDisabled();
+});
+
 test("array templates can add database element and survive frontend restart", async ({ page }) => {
   await page.goto("/demo/");
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(page.url()).origin });

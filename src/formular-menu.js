@@ -1446,7 +1446,10 @@ export class FormularMenu {
 
   getArrayElements(ref, field) {
     const key = valueKey(ref);
-    const backend = clone(field.elements || []);
+    const backend = this.inheritTemplateStateConditions(
+      clone(field.elements || []),
+      field.templates || []
+    );
     if (!this.values.has(key)) {
       this.values.set(key, backend);
       this.syncArrayChildValues(ref, backend);
@@ -1454,9 +1457,10 @@ export class FormularMenu {
     }
     const elements = this.values.get(key);
     if (Array.isArray(elements)) {
-      const next = this.hasDirtyArrayValues(ref, elements)
+      const merged = this.hasDirtyArrayValues(ref, elements)
         ? this.mergeArrayElements(ref, elements, backend)
         : backend;
+      const next = this.inheritTemplateStateConditions(merged, field.templates || []);
       this.values.set(key, next);
       this.syncArrayChildValues(ref, next);
       return next;
@@ -1465,6 +1469,26 @@ export class FormularMenu {
     this.values.set(key, next);
     this.syncArrayChildValues(ref, next);
     return next;
+  }
+
+  // Apply template rules to matching concrete element items. Element-level
+  // conditions override the same state from the template when both exist.
+  inheritTemplateStateConditions(elements, templates) {
+    const templatesByName = new Map((templates || []).map((template) => [template.name, template]));
+    for (const element of elements || []) {
+      const template = templatesByName.get(element.template);
+      if (!template) continue;
+      const templateItems = new Map((template.items || []).map((item) => [item.id, item]));
+      for (const item of element.items || []) {
+        const inherited = templateItems.get(item.id)?.stateConditions;
+        if (!inherited) continue;
+        item.stateConditions = {
+          ...clone(inherited),
+          ...clone(item.stateConditions || {})
+        };
+      }
+    }
+    return elements;
   }
 
   hasDirtyArrayValues(ref, elements) {

@@ -780,8 +780,17 @@ func serverTemplates() []formular.ArrayTemplate {
 				withHelp(field("host", formular.FieldText, "Host", "localhost", nil), "Hostname used by new HTTP server elements."),
 				withHelp(field("port", formular.FieldInt, "Port", 8080, nil), "Integer port for the HTTP endpoint."),
 				withHelp(field("tls", formular.FieldCheckbox, "TLS", false, nil), "Toggles whether the endpoint should use TLS."),
+				withItemOptions(
+					withHelp(field("certificate", formular.FieldText, "TLS certificate", "", nil), "This field is visible only when TLS is selected in this array element."),
+					formular.VisibleWhen(formular.FieldEquals("tls", true)),
+				),
 				{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Asks the backend to generate fresh values for this element."},
-				{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Nested buttons include their array element path in button.press messages."},
+				formular.Button(
+					"ping",
+					"Ping",
+					formular.ReadonlyWhen(formular.FieldEquals("host", "locked")),
+					formular.Help("This button is disabled when Host is exactly locked in this array element."),
+				),
 			},
 		},
 		{
@@ -858,8 +867,9 @@ func serverElementItems(server serverState) []formular.Item {
 			withHelp(field("host", formular.FieldText, "Host", serverValue(server, "host", "localhost"), nil), "Host for this HTTP server element."),
 			withHelp(field("port", formular.FieldInt, "Port", serverValue(server, "port", 8080), nil), "Port for this HTTP server element."),
 			withHelp(field("tls", formular.FieldCheckbox, "TLS", serverValue(server, "tls", false), nil), "Whether this HTTP server element uses TLS."),
+			withHelp(field("certificate", formular.FieldText, "TLS certificate", serverValue(server, "certificate", ""), nil), "This field inherits its visibility condition from the HTTP server template."),
 			{Type: formular.ItemButton, ID: "generate", Label: "Generate", Help: "Generates fresh HTTP server values for this element."},
-			{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "Sends a nested button press for this HTTP server element."},
+			{Type: formular.ItemButton, ID: "ping", Label: "Ping", Help: "This button inherits its readonly condition from the HTTP server template."},
 		}
 	}
 }
@@ -894,5 +904,15 @@ func field(id, kind, label string, value any, configure func(*formular.Field)) f
 
 func withHelp(item formular.Item, help string) formular.Item {
 	item.Help = help
+	return item
+}
+
+// withItemOptions applies public Formular options to a demo item.
+func withItemOptions(item formular.Item, options ...formular.ItemOption) formular.Item {
+	for _, option := range options {
+		if option != nil {
+			option(&item)
+		}
+	}
 	return item
 }
