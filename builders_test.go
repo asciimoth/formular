@@ -17,6 +17,11 @@ func TestFieldBuildersApplyOptions(t *testing.T) {
 		StatusText("Looks good"),
 		Selector("users"),
 		AutocompleteConfig(Autocomplete{Enabled: true, Tag: "email"}),
+		VisibleWhen(FieldEquals("enabled", true)),
+		ReadonlyWhen(AllStateConditions(
+			FieldNotEmpty("owner"),
+			NotStateCondition(FieldEquals("mode", "edit")),
+		)),
 	)
 
 	if item.Type != ItemField || item.ID != "email" || item.Label != "Email" || item.Help != "Account email" {
@@ -34,6 +39,15 @@ func TestFieldBuildersApplyOptions(t *testing.T) {
 	}
 	if field.Selector != "users" {
 		t.Fatalf("selector = %q, want users", field.Selector)
+	}
+	if item.StateConditions == nil || item.StateConditions.Visible == nil || item.StateConditions.Readonly == nil {
+		t.Fatalf("missing state conditions: %+v", item.StateConditions)
+	}
+	if got := item.StateConditions.Visible.Value; got != true {
+		t.Fatalf("visible expected value = %v, want true", got)
+	}
+	if got := len(item.StateConditions.Readonly.All); got != 2 {
+		t.Fatalf("readonly all condition count = %d, want 2", got)
 	}
 	if err := item.Validate(); err != nil {
 		t.Fatal(err)
@@ -95,5 +109,15 @@ func TestBuilderCopiesMutableInputs(t *testing.T) {
 	lines[0].Text = "changed"
 	if logs.Logs[0].Text != "ready" {
 		t.Fatal("logs item shared caller slice")
+	}
+
+	condition := AnyStateConditions(
+		StateValueCondition(StateBlockFieldSource("profile", "owner"), StateOperatorEquals, "Ada"),
+	)
+	button := Button("save", "Save", ReadonlyWhen(condition))
+	condition.Any[0].Source.FieldID = "changed"
+	got := button.StateConditions.Readonly.Any[0].Source.FieldID
+	if got != "owner" {
+		t.Fatalf("state condition shared caller source: %v", got)
 	}
 }

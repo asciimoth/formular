@@ -67,6 +67,89 @@ func Help(text string) ItemOption {
 	}
 }
 
+// VisibleWhen makes an item visible only while condition is true.
+//
+// The browser evaluates the condition from its current local field values. It
+// does not need a backend round trip.
+func VisibleWhen(condition StateCondition) ItemOption {
+	return func(item *Item) {
+		if item.StateConditions == nil {
+			item.StateConditions = &StateConditions{}
+		}
+		item.StateConditions.Visible = copyStateConditionPtr(&condition)
+	}
+}
+
+// ReadonlyWhen disables an interactive item while condition is true.
+//
+// A static field Readonly flag, button Inactive flag, or inactive block still
+// disables the item when this condition is false.
+func ReadonlyWhen(condition StateCondition) ItemOption {
+	return func(item *Item) {
+		if item.StateConditions == nil {
+			item.StateConditions = &StateConditions{}
+		}
+		item.StateConditions.Readonly = copyStateConditionPtr(&condition)
+	}
+}
+
+// StateFieldSource selects a field in the target item's current scope.
+//
+// For a top-level item, the scope is its block. For an item in an array
+// element, the scope is that element.
+func StateFieldSource(fieldID string) StateConditionSource {
+	return StateConditionSource{FieldID: fieldID}
+}
+
+// StateBlockFieldSource selects a top-level field in a specified block.
+func StateBlockFieldSource(blockID, fieldID string) StateConditionSource {
+	return StateConditionSource{BlockID: blockID, FieldID: fieldID}
+}
+
+// StateValueCondition constructs a field value comparison condition.
+//
+// Equals and notEquals require a string, number, or Boolean value. Empty and
+// notEmpty ignore value, so callers should pass nil for those operators.
+func StateValueCondition(source StateConditionSource, operator string, value any) StateCondition {
+	copiedSource := source.Copy()
+	return StateCondition{Source: &copiedSource, Operator: operator, Value: copyAny(value)}
+}
+
+// FieldEquals tests a field in the target item's current scope for equality.
+func FieldEquals(fieldID string, value any) StateCondition {
+	return StateValueCondition(StateFieldSource(fieldID), StateOperatorEquals, value)
+}
+
+// FieldNotEquals tests a field in the current scope for inequality.
+func FieldNotEquals(fieldID string, value any) StateCondition {
+	return StateValueCondition(StateFieldSource(fieldID), StateOperatorNotEquals, value)
+}
+
+// FieldEmpty tests whether a field in the current scope has an empty value.
+func FieldEmpty(fieldID string) StateCondition {
+	return StateValueCondition(StateFieldSource(fieldID), StateOperatorEmpty, nil)
+}
+
+// FieldNotEmpty tests whether a field in the current scope has a non-empty value.
+func FieldNotEmpty(fieldID string) StateCondition {
+	return StateValueCondition(StateFieldSource(fieldID), StateOperatorNotEmpty, nil)
+}
+
+// AllStateConditions constructs a condition that requires every child.
+func AllStateConditions(conditions ...StateCondition) StateCondition {
+	return StateCondition{All: copyStateConditions(conditions)}
+}
+
+// AnyStateConditions constructs a condition that requires at least one child.
+func AnyStateConditions(conditions ...StateCondition) StateCondition {
+	return StateCondition{Any: copyStateConditions(conditions)}
+}
+
+// NotStateCondition constructs a condition that negates its child.
+func NotStateCondition(condition StateCondition) StateCondition {
+	return StateCondition{Not: copyStateConditionPtr(&condition)}
+}
+
 // Validation enables frontend field.validate messages for a field.
 var Validation FieldOption = func(item *Item) {
 	withField(item, func(field *Field) {

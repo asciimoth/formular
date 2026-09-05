@@ -74,6 +74,14 @@ const (
 	StatusError = "error"
 )
 
+// State condition operator constants used by frontend item state rules.
+const (
+	StateOperatorEquals    = "equals"
+	StateOperatorNotEquals = "notEquals"
+	StateOperatorEmpty     = "empty"
+	StateOperatorNotEmpty  = "notEmpty"
+)
+
 // MessageBase contains fields common to all Formular protocol messages.
 type MessageBase struct {
 	// Type identifies the concrete message shape.
@@ -406,6 +414,8 @@ type Item struct {
 	Syntax string `json:"syntax,omitempty"`
 	// Help is an optional plaintext hint attached to the item.
 	Help string `json:"help,omitempty"`
+	// StateConditions declares frontend-only visibility and readonly rules.
+	StateConditions *StateConditions `json:"stateConditions,omitempty"`
 	// Progress is the percentage shown by progressbar items, from 0 to 100.
 	Progress *uint `json:"progress,omitempty"`
 	// Logs contains lines shown by logs items.
@@ -420,8 +430,69 @@ type Item struct {
 func (i Item) Copy() Item {
 	i.Progress = copyPtr(i.Progress)
 	i.Logs = copyLogLines(i.Logs)
+	i.StateConditions = copyStateConditionsPtr(i.StateConditions)
 	i.Field = copyFieldPtr(i.Field)
 	return i
+}
+
+// StateConditions controls item state from current frontend field values.
+//
+// Visible is evaluated directly: a true result shows the item and a false
+// result hides it. Readonly disables interactive items when it is true.
+type StateConditions struct {
+	// Visible controls whether the frontend renders the item as visible.
+	Visible *StateCondition `json:"visible,omitempty"`
+	// Readonly controls whether the frontend permits interaction with the item.
+	Readonly *StateCondition `json:"readonly,omitempty"`
+}
+
+// Copy returns a deep copy of s.
+func (s StateConditions) Copy() StateConditions {
+	s.Visible = copyStateConditionPtr(s.Visible)
+	s.Readonly = copyStateConditionPtr(s.Readonly)
+	return s
+}
+
+// StateCondition is one value comparison or a Boolean combination of other
+// conditions. Exactly one of Source, All, Any, or Not must define a condition.
+type StateCondition struct {
+	// Source identifies the field value used by a comparison condition.
+	Source *StateConditionSource `json:"source,omitempty"`
+	// Operator is equals, notEquals, empty, or notEmpty for a comparison.
+	Operator string `json:"operator,omitempty"`
+	// Value is the expected string, number, or Boolean for equality operators.
+	Value any `json:"value,omitempty"`
+	// All is true when every child condition is true.
+	All []StateCondition `json:"all,omitempty"`
+	// Any is true when at least one child condition is true.
+	Any []StateCondition `json:"any,omitempty"`
+	// Not negates one child condition.
+	Not *StateCondition `json:"not,omitempty"`
+}
+
+// Copy returns a deep copy of c.
+func (c StateCondition) Copy() StateCondition {
+	c.Source = copyStateConditionSourcePtr(c.Source)
+	c.Value = copyAny(c.Value)
+	c.All = copyStateConditions(c.All)
+	c.Any = copyStateConditions(c.Any)
+	c.Not = copyStateConditionPtr(c.Not)
+	return c
+}
+
+// StateConditionSource identifies a field whose current frontend value is
+// used by a state condition.
+type StateConditionSource struct {
+	// BlockID selects a top-level field in another block when it is set. When it
+	// is empty, FieldID resolves in the target item's current scope.
+	BlockID string `json:"blockId,omitempty"`
+	// FieldID identifies the source field.
+	FieldID string `json:"fieldId"`
+}
+
+// Copy returns a deep copy of s.
+func (s StateConditionSource) Copy() StateConditionSource {
+	return s
 }
 
 // LogLine is one rendered line in a logs item.
@@ -635,6 +706,41 @@ func copyItems(in []Item) []Item {
 		return nil
 	}
 	out := make([]Item, len(in))
+	for i := range in {
+		out[i] = in[i].Copy()
+	}
+	return out
+}
+
+func copyStateConditionsPtr(in *StateConditions) *StateConditions {
+	if in == nil {
+		return nil
+	}
+	out := in.Copy()
+	return &out
+}
+
+func copyStateConditionPtr(in *StateCondition) *StateCondition {
+	if in == nil {
+		return nil
+	}
+	out := in.Copy()
+	return &out
+}
+
+func copyStateConditionSourcePtr(in *StateConditionSource) *StateConditionSource {
+	if in == nil {
+		return nil
+	}
+	out := in.Copy()
+	return &out
+}
+
+func copyStateConditions(in []StateCondition) []StateCondition {
+	if in == nil {
+		return nil
+	}
+	out := make([]StateCondition, len(in))
 	for i := range in {
 		out[i] = in[i].Copy()
 	}

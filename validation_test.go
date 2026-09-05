@@ -79,6 +79,82 @@ func TestValidateAcceptsValidMenuSnapshot(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsItemStateConditions(t *testing.T) {
+	condition := AllStateConditions(
+		FieldEquals("enabled", true),
+		AnyStateConditions(
+			FieldEmpty("name"),
+			StateValueCondition(
+				StateBlockFieldSource("profile", "mode"),
+				StateOperatorNotEquals,
+				"locked",
+			),
+		),
+	)
+	item := TextField(
+		"details",
+		"Details",
+		"",
+		VisibleWhen(condition),
+		ReadonlyWhen(NotStateCondition(FieldNotEmpty("owner"))),
+	)
+
+	if err := item.Validate(); err != nil {
+		t.Fatalf("valid state conditions failed validation: %v", err)
+	}
+	if err := condition.Validate(); err != nil {
+		t.Fatalf("valid standalone state condition failed validation: %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidItemStateConditions(t *testing.T) {
+	tests := []struct {
+		name      string
+		condition StateCondition
+		want      string
+	}{
+		{name: "empty", condition: StateCondition{}, want: "exactly one"},
+		{
+			name: "multiple forms",
+			condition: StateCondition{
+				Source:   &StateConditionSource{FieldID: "enabled"},
+				Operator: StateOperatorEmpty,
+				Not:      &StateCondition{Source: &StateConditionSource{FieldID: "enabled"}, Operator: StateOperatorEmpty},
+			},
+			want: "exactly one",
+		},
+		{
+			name:      "missing source field",
+			condition: StateCondition{Source: &StateConditionSource{}, Operator: StateOperatorEmpty},
+			want:      "fieldId",
+		},
+		{
+			name:      "missing equality value",
+			condition: StateCondition{Source: &StateConditionSource{FieldID: "mode"}, Operator: StateOperatorEquals},
+			want:      "must be set",
+		},
+		{
+			name:      "value with empty operator",
+			condition: StateCondition{Source: &StateConditionSource{FieldID: "mode"}, Operator: StateOperatorEmpty, Value: "unexpected"},
+			want:      "must not be set",
+		},
+		{name: "empty all", condition: StateCondition{All: []StateCondition{}}, want: "at least one"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.condition.Validate()
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Validate() error = %v, want text %q", err, test.want)
+			}
+		})
+	}
+
+	if err := (StateConditions{}).Validate(); err == nil || !strings.Contains(err.Error(), "visible or readonly") {
+		t.Fatalf("empty StateConditions validation error = %v", err)
+	}
+}
+
 func TestValidateRejectsInvalidMenuSnapshot(t *testing.T) {
 	menu := MenuSnapshotMessage{
 		MessageBase: MessageBase{

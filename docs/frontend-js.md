@@ -102,6 +102,52 @@ Text-like `PREFIX-control` and `PREFIX-textarea` fields also receive a
 Array fields are edited locally and serialized as the protocol's
 `ArrayElementValue[]` shape when sent to the backend.
 
+## Frontend item state
+
+The renderer supports the protocol `stateConditions` property on every item.
+It evaluates `visible` and `readonly` conditions from current local field
+values. It evaluates them when it receives a snapshot, when a field changes,
+and when a form resets. This evaluation does not send a message.
+
+For example:
+
+```js
+menu.feed({
+  type: "menu.snapshot",
+  menuId: "settings",
+  menuGeneration: 1,
+  blocks: [{
+    id: "advanced",
+    order: 1,
+    generation: 1,
+    form: true,
+    items: [
+      { type: "field", id: "enabled", kind: "checkbox", label: "Enabled", value: false },
+      {
+        type: "field",
+        id: "details",
+        kind: "text",
+        label: "Details",
+        stateConditions: {
+          visible: { source: { fieldId: "enabled" }, operator: "equals", value: true }
+        }
+      }
+    ]
+  }]
+});
+```
+
+The renderer updates existing DOM nodes in place. A source text control keeps
+focus while its value changes the state of another item. It uses the native
+`hidden` property for visibility and the native `disabled` property for
+readonly controls. The item nodes also have `data-formular-readonly` for custom
+styles and tests.
+
+Relative field sources work inside array elements. Set `source.blockId` to use
+a top-level source field in another block. See [the protocol
+specification](protocol.md#frontend-item-state-conditions) for operators,
+Boolean composition, missing-source behavior, and form submission rules.
+
 ## Dialogs
 
 The browser frontend supports `yesno`, `selection`, and `captcha` dialogs.

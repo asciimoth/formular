@@ -101,6 +101,88 @@
         }
       }
     },
+    "stateConditionSource": {
+      "description": "Field value used by a frontend state condition. Without blockId, the field is resolved in the target item's current scope. With blockId, it is a top-level field in that block.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fieldId"],
+      "properties": {
+        "blockId": { "$ref": "#/$defs/id" },
+        "fieldId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "stateCondition": {
+      "description": "A frontend field-value comparison or a Boolean combination of conditions.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "operator", "value"],
+          "properties": {
+            "source": { "$ref": "#/$defs/stateConditionSource" },
+            "operator": { "enum": ["equals", "notEquals"] },
+            "value": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "number" },
+                { "type": "boolean" }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "operator"],
+          "properties": {
+            "source": { "$ref": "#/$defs/stateConditionSource" },
+            "operator": { "enum": ["empty", "notEmpty"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/stateCondition" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/stateCondition" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": {
+            "not": { "$ref": "#/$defs/stateCondition" }
+          }
+        }
+      ]
+    },
+    "stateConditions": {
+      "description": "Conditions that the frontend evaluates from current local field values after each change.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "visible": { "$ref": "#/$defs/stateCondition" },
+        "readonly": { "$ref": "#/$defs/stateCondition" }
+      }
+    },
     "button": {
       "type": "object",
       "additionalProperties": false,
@@ -110,7 +192,8 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "type": "string" },
         "inactive": { "type": "boolean", "default": false },
-        "help": { "type": "string" }
+        "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" }
       }
     },
     "header": {
@@ -121,7 +204,8 @@
         "type": { "const": "header" },
         "id": { "$ref": "#/$defs/id" },
         "text": { "type": "string" },
-        "help": { "type": "string" }
+        "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" }
       }
     },
     "label": {
@@ -134,7 +218,8 @@
         "text": { "type": "string" },
         "format": { "$ref": "#/$defs/textFormat", "default": "plain" },
         "syntax": { "type": "string" },
-        "help": { "type": "string" }
+        "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" }
       }
     },
     "progressbar": {
@@ -146,7 +231,8 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "type": "string" },
         "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "help": { "type": "string" }
+        "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" }
       }
     },
     "logs": {
@@ -161,7 +247,8 @@
           "type": "array",
           "items": { "$ref": "#/$defs/logLine" }
         },
-        "help": { "type": "string" }
+        "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" }
       }
     },
     "logLine": {
@@ -185,6 +272,7 @@
         "value": { "$ref": "#/$defs/value" },
         "placeholder": { "type": "string" },
         "help": { "type": "string" },
+        "stateConditions": { "$ref": "#/$defs/stateConditions" },
         "readonly": { "type": "boolean", "default": false },
         "required": { "type": "boolean", "default": false },
         "validate": { "type": "boolean", "default": false },

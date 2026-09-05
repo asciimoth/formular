@@ -89,6 +89,12 @@ Each item has a `type`.
 All items may have plaintext `help`.
 Frontends can show help as a tooltip, side panel, popover, or equivalent.
 
+All items may also have `stateConditions`. These conditions let the frontend
+change item visibility and readonly state from current frontend field values.
+The backend declares the rules in a snapshot. The frontend evaluates the rules
+after each local value change. A state change does not require a backend
+message or a new snapshot.
+
 Headers have no levels because Formular menus do not define nested sections.
 Plain labels are unformatted by default.
 Markdown labels intentionally do not define a strict markdown subset, but frontends should support basic links and text styling when practical.
@@ -100,6 +106,123 @@ Logs are display-only items. Each log line has a `level` and `text`; frontends s
 
 Buttons can appear above, below, or between fields according to item order.
 When a button is activated, the frontend sends `button.press`.
+
+## Frontend Item State Conditions
+
+An item can define one or both of these conditions:
+
+- `visible`: The frontend shows the item when the condition is true. It hides
+  the item when the condition is false. An item without this condition is
+  visible.
+- `readonly`: The frontend disables the controls in a field or button when the
+  condition is true. The condition has no visual effect on a display-only
+  item. An item without this condition keeps its static state.
+
+Static state has priority. An inactive block, an inactive button, or a readonly
+field stays disabled when a `readonly` condition is false.
+
+This example shows `advanced-input` only when `advanced` is on. It disables the
+button when `mode` has the exact text `locked`:
+
+```json
+{
+  "items": [
+    {
+      "type": "field",
+      "id": "advanced",
+      "kind": "checkbox",
+      "label": "Advanced",
+      "value": false
+    },
+    {
+      "type": "field",
+      "id": "mode",
+      "kind": "text",
+      "label": "Mode",
+      "value": "edit"
+    },
+    {
+      "type": "field",
+      "id": "advanced-input",
+      "kind": "text",
+      "label": "Advanced input",
+      "stateConditions": {
+        "visible": {
+          "source": { "fieldId": "advanced" },
+          "operator": "equals",
+          "value": true
+        }
+      }
+    },
+    {
+      "type": "button",
+      "id": "run",
+      "label": "Run",
+      "stateConditions": {
+        "readonly": {
+          "source": { "fieldId": "mode" },
+          "operator": "equals",
+          "value": "locked"
+        }
+      }
+    }
+  ]
+}
+```
+
+A comparison condition has a `source` and an `operator`. The source always has
+a `fieldId`:
+
+- If `blockId` is absent, the frontend finds the source field in the target
+  item's current scope. A top-level item uses its block. An item in an array
+  element uses that array element.
+- If `blockId` is present, the frontend finds a top-level field in that block.
+  This form supports conditions across blocks.
+
+An unknown block or field makes the comparison false.
+
+The operators are:
+
+- `equals`: The current value and declared `value` have the same JSON scalar
+  type and value.
+- `notEquals`: The current value and declared `value` do not have the same JSON
+  scalar type and value.
+- `empty`: The current value is `null`, an empty string, or an empty array.
+- `notEmpty`: The current value is not empty.
+
+`equals` and `notEquals` require a string, number, or Boolean `value`. `empty`
+and `notEmpty` do not have a `value` property.
+
+Conditions can contain other conditions:
+
+```json
+{
+  "stateConditions": {
+    "visible": {
+      "all": [
+        { "source": { "fieldId": "enabled" }, "operator": "equals", "value": true },
+        {
+          "any": [
+            { "source": { "fieldId": "name" }, "operator": "notEmpty" },
+            { "not": { "source": { "fieldId": "mode" }, "operator": "equals", "value": "hidden" } }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+- `all` is true when all child conditions are true.
+- `any` is true when one or more child conditions are true.
+- `not` reverses one child condition.
+
+`all` and `any` must contain at least one condition.
+
+The frontend keeps the value of a hidden field. It includes that value in
+`form.apply`. A hidden field does not block Apply because of `required` or
+`validate`. This behavior keeps the form value shape stable while the user
+changes visibility conditions.
 
 ## Fields
 Base field kinds are:

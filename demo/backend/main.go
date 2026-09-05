@@ -471,6 +471,10 @@ func applyForm(menuID string, msg map[string]any) {
 		ack(menuID, "log-submit", "Log line submitted")
 		return
 	}
+	if blockID == "frontend-state" {
+		ack(menuID, "frontend-state", "Frontend state form submitted")
+		return
+	}
 	for key, value := range values {
 		profileValues[key] = value
 	}
@@ -681,6 +685,32 @@ func leftBlocks() []formular.Block {
 				{Type: formular.ItemButton, ID: "dialog-yesno", Label: "Yes/no dialog", Help: "Opens a dialog that returns true or false."},
 				{Type: formular.ItemButton, ID: "dialog-selection", Label: "Selection dialog", Help: "Opens a multiple-selection dialog."},
 				{Type: formular.ItemButton, ID: "dialog-captcha", Label: "Captcha dialog", Help: "Opens a text captcha with an attached base64 image."},
+			},
+		},
+		{
+			ID:         "frontend-state",
+			Order:      40,
+			Generation: 1,
+			Form:       true,
+			Items: []formular.Item{
+				{Type: formular.ItemHeader, ID: "title", Text: "Frontend state conditions", Help: "These rules react to form-local values without a backend round trip."},
+				{Type: formular.ItemLabel, ID: "description", Text: "Select Show advanced to reveal the required field. Type locked to disable the action button.", Format: formular.TextPlain},
+				formular.CheckboxField("showAdvanced", "Show advanced", false),
+				formular.TextField("actionMode", "Action mode", "edit", formular.Placeholder("Type locked")),
+				formular.TextField(
+					"advancedNote",
+					"Advanced note",
+					"",
+					formular.Required,
+					formular.VisibleWhen(formular.FieldEquals("showAdvanced", true)),
+					formular.Help("The frontend shows this field only while Show advanced is selected."),
+				),
+				formular.Button(
+					"conditional-action",
+					"Conditional action",
+					formular.ReadonlyWhen(formular.FieldEquals("actionMode", "locked")),
+					formular.Help("The frontend disables this button when Action mode is exactly locked."),
+				),
 			},
 		},
 	}

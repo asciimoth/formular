@@ -4,6 +4,7 @@ const STYLE_ID = "formular-menu-default-theme";
 const DEFAULT_THEME = `
 .formular-root{box-sizing:border-box;color:#cdd6f4;background:#1e1e2e;border:1px solid #313244;border-radius:8px;font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:14px}
 .formular-root *{box-sizing:border-box}
+.formular-root [hidden]{display:none!important}
 .formular-menu{display:flex;flex-direction:column;gap:12px}
 .formular-empty{color:#9399b2}
 .formular-block{background:#181825;border:1px solid #313244;border-radius:8px;overflow:hidden}
@@ -300,6 +301,7 @@ export class FormularMenu {
       this.trackLocalElementIDs(message.block);
       this.blocks.set(message.block.id, this.blockWithLocalCollapse(message.block));
       this.renderBlockById(message.block.id);
+      this.refreshItemStates();
       this.requestBlockValidation(message.block);
       return true;
     }
@@ -307,6 +309,7 @@ export class FormularMenu {
       this.blocks.delete(message.blockId);
       this.clearBlockDirtyValues(message.blockId);
       this.deleteBlockNode(message.blockId);
+      this.refreshItemStates();
       return true;
     }
     if (message.type === "field.status") {
@@ -517,6 +520,7 @@ export class FormularMenu {
       return;
     }
     this.root.replaceChildren(...blocks.map((block) => this.renderBlock(block)));
+    this.refreshItemStates();
   }
 
   applyMenuSnapshot(blocks) {
@@ -534,6 +538,7 @@ export class FormularMenu {
       }
     }
     for (const block of this.sortedBlocks()) this.renderBlockById(block.id);
+    this.refreshItemStates();
   }
 
   blockWithLocalCollapse(block) {
@@ -593,6 +598,7 @@ export class FormularMenu {
     for (const item of next.items || []) {
       const child = [...body.children].find((element) => element.dataset.formularItemId === item.id);
       if (!child || child.dataset.formularItemType !== item.type || !this.patchItem(child, item)) return false;
+      this.markItemNode(child, next, item, []);
     }
     this.updateFormActions(next);
     node.__formularBlock = clone(next);
@@ -739,22 +745,121 @@ export class FormularMenu {
       node.className = css(this.prefix, "header");
       setTextWithHelp(node, item.text || "", this.prefix, item.help);
       if (item.help) node.title = item.help;
-      return this.markItemNode(node, item);
+      return this.markItemNode(node, block, item, elementPath);
     }
-    if (item.type === "label") return this.markItemNode(this.renderLabel(item), item);
-    if (item.type === "progressbar") return this.markItemNode(this.renderProgressbar(item), item);
-    if (item.type === "logs") return this.markItemNode(this.renderLogs(item), item);
-    if (item.type === "button") return this.markItemNode(this.renderActionButton(block, item, elementPath, disabled), item);
-    if (item.type === "field") return this.markItemNode(this.renderField(block, item, elementPath, disabled), item);
+    if (item.type === "label") return this.markItemNode(this.renderLabel(item), block, item, elementPath);
+    if (item.type === "progressbar") return this.markItemNode(this.renderProgressbar(item), block, item, elementPath);
+    if (item.type === "logs") return this.markItemNode(this.renderLogs(item), block, item, elementPath);
+    if (item.type === "button") return this.markItemNode(this.renderActionButton(block, item, elementPath, disabled), block, item, elementPath);
+    if (item.type === "field") return this.markItemNode(this.renderField(block, item, elementPath, disabled), block, item, elementPath);
     const unknown = document.createElement("div");
     unknown.textContent = `Unsupported item: ${item.type}`;
-    return this.markItemNode(unknown, item);
+    return this.markItemNode(unknown, block, item, elementPath);
   }
 
-  markItemNode(node, item) {
+  markItemNode(node, block, item, elementPath) {
     node.dataset.formularItemId = item.id;
     node.dataset.formularItemType = item.type;
+    node.__formularStateContext = {
+      blockId: block.id,
+      item,
+      elementPath: clone(elementPath || [])
+    };
     return node;
+  }
+
+  // Re-evaluate all declared item state without rebuilding controls. This
+  // preserves focus and keeps conditional state entirely in the frontend.
+  refreshItemStates() {
+    if (this.destroyed) return;
+    const selector = "[data-formular-item-id][data-formular-item-type]";
+    for (const node of this.root.querySelectorAll(selector)) {
+      const context = node.__formularStateContext;
+      if (!context) continue;
+      const block = this.blocks.get(context.blockId);
+      if (!block) continue;
+      this.applyItemState(node, block, context);
+    }
+    for (const block of this.blocks.values()) {
+      if (block.form) this.updateFormActions(block);
+    }
+  }
+
+  applyItemState(node, block, context) {
+    const item = context.item;
+    const conditions = item.stateConditions || {};
+    const visible = conditions.visible
+      ? this.evaluateStateCondition(conditions.visible, context)
+      : true;
+    const conditionalReadonly = conditions.readonly
+      ? this.evaluateStateCondition(conditions.readonly, context)
+      : false;
+    const staticReadonly = Boolean(
+      block.inactive
+      || item.inactive
+      || (item.type === "field" && item.readonly)
+    );
+    const parentReadonly = Boolean(node.parentElement?.closest(
+      '[data-formular-item-id][data-formular-readonly="true"]'
+    ));
+    const readonly = staticReadonly || conditionalReadonly || parentReadonly;
+
+    node.hidden = !visible;
+    node.dataset.formularReadonly = String(readonly);
+    if (item.type === "button") node.disabled = readonly;
+    if (item.type === "field") {
+      for (const control of node.querySelectorAll("button, input, select, textarea")) {
+        control.disabled = readonly || Boolean(control.__formularAlwaysDisabled);
+      }
+    }
+  }
+
+  evaluateStateCondition(condition, context) {
+    if (!condition || typeof condition !== "object") return false;
+    if (Array.isArray(condition.all)) {
+      return condition.all.length > 0
+        && condition.all.every((child) => this.evaluateStateCondition(child, context));
+    }
+    if (Array.isArray(condition.any)) {
+      return condition.any.length > 0
+        && condition.any.some((child) => this.evaluateStateCondition(child, context));
+    }
+    if (condition.not) return !this.evaluateStateCondition(condition.not, context);
+
+    const source = this.stateConditionSource(condition.source, context);
+    if (!source.found) return false;
+    if (condition.operator === "equals") return source.value === condition.value;
+    if (condition.operator === "notEquals") return source.value !== condition.value;
+    if (condition.operator === "empty") return isEmpty(source.value);
+    if (condition.operator === "notEmpty") return !isEmpty(source.value);
+    return false;
+  }
+
+  stateConditionSource(source, context) {
+    if (!source || typeof source.fieldId !== "string" || !source.fieldId) {
+      return { found: false, value: null };
+    }
+    const crossBlock = typeof source.blockId === "string" && source.blockId.length > 0;
+    const ref = {
+      blockId: crossBlock ? source.blockId : context.blockId,
+      fieldId: source.fieldId,
+      elementPath: crossBlock || !context.elementPath?.length
+        ? undefined
+        : clone(context.elementPath)
+    };
+    const field = this.findField(ref);
+    if (!field) return { found: false, value: null };
+    const fallback = field.kind === "array" ? field.elements || [] : field.value;
+    return { found: true, value: this.getValue(ref, fallback) };
+  }
+
+  itemIsVisible(block, item, elementPath = []) {
+    const condition = item.stateConditions?.visible;
+    return !condition || this.evaluateStateCondition(condition, {
+      blockId: block.id,
+      item,
+      elementPath
+    });
   }
 
   renderLabel(item) {
@@ -1066,6 +1171,7 @@ export class FormularMenu {
     }
     const add = this.button("+", "Add element");
     add.disabled = disabled || field.readonly || !templates.length;
+    add.__formularAlwaysDisabled = !templates.length;
     add.addEventListener("click", () => this.addArrayElement(block, field, ref, templateSelect?.value || templates[0].name));
     actions.append(add);
     header.append(label, actions);
@@ -1189,6 +1295,7 @@ export class FormularMenu {
       currentField.statusText = "";
       this.updateFieldStatusDOM(ref, currentField);
     }
+    this.refreshItemStates();
     if (currentField.validate && currentField.kind !== "file") this.send({ type: "field.validate", ...this.base(currentBlock), field: ref, value });
     if (!currentBlock.form) this.send({ type: "field.update", ...this.base(currentBlock), field: ref, value });
     if (currentBlock.form) this.updateFormActions(currentBlock);
@@ -1263,6 +1370,7 @@ export class FormularMenu {
     field.statusText = message.statusText || "";
     if (message.readonly != null) field.readonly = Boolean(message.readonly);
     this.updateFieldStatusDOM(message.field, field);
+    this.refreshItemStates();
     const block = this.blocks.get(message.field.blockId);
     if (block?.form) this.updateFormActions(block);
   }
@@ -1273,6 +1381,7 @@ export class FormularMenu {
       field.status = status;
       field.statusText = statusText;
       this.updateFieldStatusDOM(ref, field);
+      this.refreshItemStates();
       const block = this.blocks.get(ref.blockId);
       if (block?.form) this.updateFormActions(block);
     }
@@ -1317,10 +1426,20 @@ export class FormularMenu {
     const block = this.blocks.get(ref.blockId);
     if (!block) return null;
     let items = block.items || [];
+    const parentPath = [];
     for (const segment of ref.elementPath || []) {
       const array = items.find((item) => item.type === "field" && item.id === segment.arrayFieldId);
-      const element = array?.elements?.find((item) => item.id === segment.elementId);
+      if (!array) return null;
+      const arrayRef = {
+        blockId: ref.blockId,
+        fieldId: segment.arrayFieldId,
+        elementPath: parentPath.length ? clone(parentPath) : undefined
+      };
+      const current = this.values.get(valueKey(arrayRef));
+      const elements = Array.isArray(current) ? current : array.elements || [];
+      const element = elements.find((item) => item.id === segment.elementId);
       items = element?.items || [];
+      parentPath.push(segment);
     }
     return items.find((item) => item.type === "field" && item.id === ref.fieldId) || null;
   }
@@ -1524,6 +1643,7 @@ export class FormularMenu {
   canApply(block) {
     for (const item of block.items || []) {
       if (item.type !== "field") continue;
+      if (!this.itemIsVisible(block, item)) continue;
       const value = this.getValue({ blockId: block.id, fieldId: item.id }, item.value);
       if (item.required && isEmpty(value)) return false;
       if (item.validate && item.kind !== "file" && item.status !== "ok") return false;

@@ -17,6 +17,32 @@ test("demo boots Go WASM backend and renders both menus", async ({ page }) => {
   await expect(page.getByText("Activity log")).toBeVisible();
 });
 
+test("demo evaluates item state conditions in the frontend", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const block = page.locator("#left-menu [data-block-id='frontend-state']");
+  const advanced = block.getByLabel("Advanced note *");
+  const action = block.getByRole("button", { name: "Conditional action" });
+  const apply = block.getByRole("button", { name: "Apply" });
+  const updates = page.locator("#message-log li", { hasText: "frontend -> middleware field.update" });
+  const updatesBefore = await updates.count();
+
+  await expect(advanced).toBeHidden();
+  await expect(apply).toBeEnabled();
+  await expect(action).toBeEnabled();
+
+  await block.getByLabel("Show advanced").check();
+  await expect(advanced).toBeVisible();
+  await expect(apply).toBeDisabled();
+  await advanced.fill("Local condition value");
+  await expect(apply).toBeEnabled();
+
+  await block.getByLabel("Action mode").fill("locked");
+  await expect(action).toBeDisabled();
+  await expect(updates).toHaveCount(updatesBefore);
+});
+
 test("demo dialogs complete backend message round trips", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

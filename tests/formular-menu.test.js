@@ -77,6 +77,202 @@ test("renders a menu snapshot and sends field messages", () => {
   assert.equal(outbox[1].blockGeneration, 3);
 });
 
+test("updates conditional visibility and readonly state without backend messages", () => {
+  setupDom();
+  const outbox = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message));
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "form",
+      order: 1,
+      generation: 1,
+      form: true,
+      items: [
+        { type: "field", id: "advanced", kind: "checkbox", label: "Advanced", value: false },
+        { type: "field", id: "lock", kind: "text", label: "Lock", value: "edit" },
+        {
+          type: "field",
+          id: "details",
+          kind: "text",
+          label: "Details",
+          value: "",
+          required: true,
+          stateConditions: {
+            visible: {
+              all: [
+                { source: { fieldId: "advanced" }, operator: "equals", value: true },
+                { source: { fieldId: "lock" }, operator: "notEquals", value: "blocked" }
+              ]
+            }
+          }
+        },
+        {
+          type: "button",
+          id: "save",
+          label: "Save draft",
+          stateConditions: {
+            readonly: { source: { fieldId: "lock" }, operator: "equals", value: "locked" }
+          }
+        },
+        {
+          type: "label",
+          id: "summary",
+          text: "Conditional summary",
+          stateConditions: {
+            visible: {
+              any: [
+                { source: { fieldId: "advanced" }, operator: "equals", value: true },
+                { not: { source: { fieldId: "lock" }, operator: "notEmpty" } }
+              ]
+            }
+          }
+        },
+        {
+          type: "label",
+          id: "empty-lock",
+          text: "Lock is empty",
+          stateConditions: {
+            visible: { source: { fieldId: "lock" }, operator: "empty" }
+          }
+        },
+        {
+          type: "label",
+          id: "missing-source",
+          text: "Missing source",
+          stateConditions: {
+            visible: { source: { fieldId: "unknown" }, operator: "equals", value: true }
+          }
+        },
+        {
+          type: "button",
+          id: "inactive",
+          label: "Always inactive",
+          inactive: true,
+          stateConditions: {
+            readonly: { source: { fieldId: "advanced" }, operator: "equals", value: true }
+          }
+        }
+      ]
+    }]
+  });
+
+  const item = (id) => document.querySelector(`[data-formular-item-id='${id}']`);
+  const apply = [...document.querySelectorAll("button")].find((button) => button.textContent === "Apply");
+  const save = item("save");
+  const advanced = item("advanced").querySelector("input");
+  const lock = item("lock").querySelector("input");
+
+  assert.equal(item("details").hidden, true);
+  assert.equal(item("summary").hidden, true);
+  assert.equal(item("empty-lock").hidden, true);
+  assert.equal(item("missing-source").hidden, true);
+  assert.equal(apply.disabled, false, "a hidden required field must not block apply");
+  assert.equal(save.disabled, false);
+  assert.equal(item("inactive").disabled, true, "static inactive state must have priority");
+
+  advanced.checked = true;
+  advanced.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(item("details").hidden, false);
+  assert.equal(item("summary").hidden, false);
+  assert.equal(apply.disabled, true, "the visible required field must block apply");
+
+  lock.focus();
+  lock.value = "";
+  lock.dispatchEvent(new window.Event("input", { bubbles: true }));
+  assert.equal(item("empty-lock").hidden, false);
+  lock.value = "locked";
+  lock.dispatchEvent(new window.Event("input", { bubbles: true }));
+  assert.equal(document.activeElement, lock, "state evaluation must not rebuild the source control");
+  assert.equal(item("empty-lock").hidden, true);
+  assert.equal(save.disabled, true);
+  assert.equal(outbox.length, 0, "form-local state changes must not need a backend round trip");
+});
+
+test("resolves state sources across blocks and inside array elements", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [
+      {
+        id: "controls",
+        order: 1,
+        generation: 1,
+        form: true,
+        items: [
+          { type: "field", id: "showStatus", kind: "checkbox", label: "Show status", value: false }
+        ]
+      },
+      {
+        id: "content",
+        order: 2,
+        generation: 1,
+        form: true,
+        items: [
+          {
+            type: "label",
+            id: "status",
+            text: "Cross-block status",
+            stateConditions: {
+              visible: {
+                source: { blockId: "controls", fieldId: "showStatus" },
+                operator: "equals",
+                value: true
+              }
+            }
+          },
+          {
+            type: "field",
+            id: "servers",
+            kind: "array",
+            label: "Servers",
+            templates: [],
+            elements: [{
+              id: "server-1",
+              template: "http",
+              items: [
+                { type: "field", id: "tls", kind: "checkbox", label: "TLS", value: false },
+                {
+                  type: "field",
+                  id: "certificate",
+                  kind: "text",
+                  label: "Certificate",
+                  value: "",
+                  stateConditions: {
+                    visible: { source: { fieldId: "tls" }, operator: "equals", value: true }
+                  }
+                }
+              ]
+            }]
+          }
+        ]
+      }
+    ]
+  });
+
+  const status = document.querySelector("[data-formular-item-id='status']");
+  const certificate = document.querySelector("[data-formular-item-id='certificate']");
+  const add = document.querySelector("[data-formular-item-id='servers'] button[title='Add element']");
+  assert.equal(status.hidden, true);
+  assert.equal(certificate.hidden, true);
+  assert.equal(add.disabled, true, "state refresh must preserve intrinsic control state");
+
+  const showStatus = document.querySelector("[data-block-id='controls'] input[type='checkbox']");
+  showStatus.checked = true;
+  showStatus.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(status.hidden, false);
+
+  const tls = document.querySelector("[data-formular-item-id='tls'] input[type='checkbox']");
+  tls.checked = true;
+  tls.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(certificate.hidden, false);
+});
+
 test("multiline text fields do not wrap and expand to fit their content", async () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

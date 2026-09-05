@@ -218,6 +218,27 @@ func (i Item) Validate() error {
 	return v.err()
 }
 
+// Validate returns an error if s is not a valid item state condition set.
+func (s StateConditions) Validate() error {
+	var v validator
+	v.stateConditions("stateConditions", s)
+	return v.err()
+}
+
+// Validate returns an error if c is not a valid item state condition.
+func (c StateCondition) Validate() error {
+	var v validator
+	v.stateCondition("stateCondition", c)
+	return v.err()
+}
+
+// Validate returns an error if s is not a valid state condition source.
+func (s StateConditionSource) Validate() error {
+	var v validator
+	v.stateConditionSource("stateConditionSource", s)
+	return v.err()
+}
+
 // Validate returns an error if l is not a valid log line.
 func (l LogLine) Validate() error {
 	var v validator
@@ -463,6 +484,9 @@ func (v *validator) items(path string, items []Item, inArrayElement bool) {
 func (v *validator) item(path string, item Item, inArrayElement bool) {
 	v.requiredID(path+".type", item.Type)
 	v.requiredID(path+".id", item.ID)
+	if item.StateConditions != nil {
+		v.stateConditions(path+".stateConditions", *item.StateConditions)
+	}
 	switch item.Type {
 	case ItemHeader:
 		if inArrayElement {
@@ -529,6 +553,89 @@ func (v *validator) item(path string, item Item, inArrayElement bool) {
 	default:
 		v.add(path+".type", "must be one of header, label, progressbar, logs, button, field")
 	}
+}
+
+func (v *validator) stateConditions(path string, conditions StateConditions) {
+	if conditions.Visible == nil && conditions.Readonly == nil {
+		v.add(path, "must define visible or readonly")
+		return
+	}
+	if conditions.Visible != nil {
+		v.stateCondition(path+".visible", *conditions.Visible)
+	}
+	if conditions.Readonly != nil {
+		v.stateCondition(path+".readonly", *conditions.Readonly)
+	}
+}
+
+func (v *validator) stateCondition(path string, condition StateCondition) {
+	comparison := condition.Source != nil || condition.Operator != "" || condition.Value != nil
+	forms := 0
+	if comparison {
+		forms++
+	}
+	if condition.All != nil {
+		forms++
+	}
+	if condition.Any != nil {
+		forms++
+	}
+	if condition.Not != nil {
+		forms++
+	}
+	if forms != 1 {
+		v.add(path, "must define exactly one of source, all, any, or not")
+		return
+	}
+
+	if comparison {
+		if condition.Source == nil {
+			v.add(path+".source", "must not be nil")
+		} else {
+			v.stateConditionSource(path+".source", *condition.Source)
+		}
+		switch condition.Operator {
+		case StateOperatorEquals, StateOperatorNotEquals:
+			if condition.Value == nil {
+				v.add(path+".value", "must be set for equality operators")
+			} else if !isString(condition.Value) && !isNumber(condition.Value) {
+				if _, ok := condition.Value.(bool); !ok {
+					v.add(path+".value", "must be a string, number, or boolean")
+				}
+			}
+		case StateOperatorEmpty, StateOperatorNotEmpty:
+			if condition.Value != nil {
+				v.add(path+".value", "must not be set for empty operators")
+			}
+		default:
+			v.add(path+".operator", "must be one of equals, notEquals, empty, notEmpty")
+		}
+		return
+	}
+
+	if condition.All != nil {
+		v.stateConditionList(path+".all", condition.All)
+	}
+	if condition.Any != nil {
+		v.stateConditionList(path+".any", condition.Any)
+	}
+	if condition.Not != nil {
+		v.stateCondition(path+".not", *condition.Not)
+	}
+}
+
+func (v *validator) stateConditionList(path string, conditions []StateCondition) {
+	if len(conditions) == 0 {
+		v.add(path, "must contain at least one condition")
+		return
+	}
+	for i, condition := range conditions {
+		v.stateCondition(indexPath(path, i), condition)
+	}
+}
+
+func (v *validator) stateConditionSource(path string, source StateConditionSource) {
+	v.requiredID(path+".fieldId", source.FieldID)
 }
 
 func (v *validator) logLine(path string, line LogLine) {

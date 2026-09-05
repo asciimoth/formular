@@ -45,6 +45,35 @@ export type FieldKind = "text" | "int" | "float" | "file" | "checkbox" | "radio"
 export type ValidationStatus = "unset" | "ok" | "warn" | "error";
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "panic";
 export type DialogKind = "yesno" | "selection" | "captcha";
+export type StateConditionOperator = "equals" | "notEquals" | "empty" | "notEmpty";
+export type StateComparableValue = string | number | boolean;
+
+export interface StateConditionSource {
+  /** Selects a top-level field in this block. Omit it to use the target item's current scope. */
+  blockId?: string;
+  fieldId: string;
+}
+
+export type StateCondition =
+  | {
+      source: StateConditionSource;
+      operator: "equals" | "notEquals";
+      value: StateComparableValue;
+    }
+  | {
+      source: StateConditionSource;
+      operator: "empty" | "notEmpty";
+    }
+  | { all: StateCondition[] }
+  | { any: StateCondition[] }
+  | { not: StateCondition };
+
+export interface StateConditions {
+  /** The item is visible when this condition is true. */
+  visible?: StateCondition;
+  /** The interactive item is readonly when this condition is true. */
+  readonly?: StateCondition;
+}
 
 export interface DialogResource {
   id: string;
@@ -97,6 +126,8 @@ export interface ItemBase {
   type: string;
   id: string;
   help?: string;
+  /** Frontend-only state derived from current frontend field values. */
+  stateConditions?: StateConditions;
 }
 
 export interface HeaderItem extends ItemBase {

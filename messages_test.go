@@ -21,7 +21,15 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 				Form:       true,
 				Copyable:   &Copyable{Text: "copy"},
 				Items: []Item{
-					{Type: ItemProgressbar, ID: "sync", Label: "Sync", Progress: &progress},
+					{
+						Type:     ItemProgressbar,
+						ID:       "sync",
+						Label:    "Sync",
+						Progress: &progress,
+						StateConditions: &StateConditions{Visible: &StateCondition{
+							Any: []StateCondition{FieldEquals("enabled", true), FieldNotEmpty("mode")},
+						}},
+					},
 					{Type: ItemLogs, ID: "logs", Label: "Logs", Logs: []LogLine{{Level: LogInfo, Text: "ready"}}},
 					{
 						Type:  ItemField,
@@ -71,6 +79,8 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 
 	copied.Blocks[0].Copyable.Text = "changed"
 	*copied.Blocks[0].Items[0].Progress = 20
+	copied.Blocks[0].Items[0].StateConditions.Visible.Any[0].Value = false
+	copied.Blocks[0].Items[0].StateConditions.Visible.Any[1].Source.FieldID = "changed"
 	copied.Blocks[0].Items[1].Logs[0].Text = "changed"
 	copied.Blocks[0].Items[2].Field.Autocomplete.Tag = "changed"
 	copied.Blocks[0].Items[2].Field.Min = nil
@@ -86,6 +96,12 @@ func TestMenuSnapshotMessageCopyDoesNotShareNestedState(t *testing.T) {
 	}
 	if original.Blocks[0].Items[0].Progress == nil || *original.Blocks[0].Items[0].Progress != 10 {
 		t.Fatal("progress pointer was shared")
+	}
+	if original.Blocks[0].Items[0].StateConditions.Visible.Any[0].Value != true {
+		t.Fatal("state condition value was shared")
+	}
+	if original.Blocks[0].Items[0].StateConditions.Visible.Any[1].Source.FieldID != "mode" {
+		t.Fatal("state condition source was shared")
 	}
 	if original.Blocks[0].Items[1].Logs[0].Text != "ready" {
 		t.Fatal("logs were shared")

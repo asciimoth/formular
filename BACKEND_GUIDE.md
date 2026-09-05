@@ -781,6 +781,87 @@ You can also include status in the original field snapshot:
 Still validate everything again when processing `field.update` or `form.apply`.
 Frontend validation only improves UI feedback.
 
+## Declare frontend item state conditions
+
+Use `stateConditions` when one field value must immediately change another
+item. The frontend stores and evaluates these rules. It does not wait for the
+backend to return a snapshot.
+
+For example, this field is visible only when `advanced` is `true`:
+
+```json
+{
+  "type": "field",
+  "id": "advanced-input",
+  "label": "Advanced input",
+  "kind": "text",
+  "stateConditions": {
+    "visible": {
+      "source": { "fieldId": "advanced" },
+      "operator": "equals",
+      "value": true
+    }
+  }
+}
+```
+
+This button is readonly when `mode` has the exact value `locked`:
+
+```json
+{
+  "type": "button",
+  "id": "run",
+  "label": "Run",
+  "stateConditions": {
+    "readonly": {
+      "source": { "fieldId": "mode" },
+      "operator": "equals",
+      "value": "locked"
+    }
+  }
+}
+```
+
+The Go builders produce these rules without manual nested structs:
+
+```go
+advancedInput := formular.TextField(
+    "advanced-input",
+    "Advanced input",
+    "",
+    formular.VisibleWhen(formular.FieldEquals("advanced", true)),
+)
+
+run := formular.Button(
+    "run",
+    "Run",
+    formular.ReadonlyWhen(formular.FieldEquals("mode", "locked")),
+)
+```
+
+Use `FieldNotEquals`, `FieldEmpty`, and `FieldNotEmpty` for other simple
+comparisons. Use `AllStateConditions`, `AnyStateConditions`, and
+`NotStateCondition` to combine rules.
+
+A source field is in the same block or array element by default. Use
+`StateValueCondition` with `StateBlockFieldSource` for a top-level field in
+another block:
+
+```go
+condition := formular.StateValueCondition(
+    formular.StateBlockFieldSource("permissions", "can-edit"),
+    formular.StateOperatorEquals,
+    true,
+)
+```
+
+The frontend keeps and submits hidden field values, but hidden fields do not
+block Apply because of `required` or `validate`. Static state has priority: an
+inactive block, inactive button, or readonly field stays disabled.
+
+See [Frontend Item State Conditions](docs/protocol.md#frontend-item-state-conditions)
+for the full contract and missing-source behavior.
+
 ## Use readonly and inactive state
 Use field-level `readonly` when a value is visible but should not be edited:
 
