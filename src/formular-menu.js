@@ -45,7 +45,17 @@ const DEFAULT_THEME = `
 .formular-field{display:flex;flex-direction:column;gap:5px}
 .formular-field-row{align-items:center;display:flex;gap:10px;min-height:34px}
 .formular-field-label{color:#bac2de;font-weight:650}
+.formular-toggle-field{align-items:center;flex-direction:row;flex-wrap:wrap}
+.formular-toggle-field>.formular-field-label{flex:1 1 12rem;min-width:0}
+.formular-toggle-field>.formular-field-row{flex:0 0 auto}
+.formular-toggle-field>.formular-status{flex-basis:100%}
 .formular-required{color:#f38ba8}
+.formular-toggle{appearance:none;background:#45475a;border:1px solid #585b70;border-radius:999px;cursor:pointer;height:24px;margin:0;position:relative;transition:background-color .16s ease,border-color .16s ease;width:42px}
+.formular-toggle::before{background:#cdd6f4;border-radius:50%;content:"";height:18px;left:2px;position:absolute;top:2px;transition:transform .16s ease;width:18px}
+.formular-toggle:checked{background:#89b4fa;border-color:#89b4fa}
+.formular-toggle:checked::before{background:#11111b;transform:translateX(18px)}
+.formular-toggle:focus-visible{outline:2px solid rgba(137,180,250,.5);outline-offset:2px}
+.formular-toggle:disabled{cursor:not-allowed;opacity:.45}
 .formular-control,.formular-select,.formular-textarea{background:#11111b;border:1px solid #45475a;border-radius:6px;color:#cdd6f4;font:inherit;min-height:34px;padding:6px 8px;width:100%}
 .formular-control:focus,.formular-select:focus,.formular-textarea:focus{border-color:#89b4fa;outline:2px solid rgba(137,180,250,.25)}
 .formular-control[data-status="ok"],.formular-textarea[data-status="ok"]{border-color:#a6e3a1}
@@ -970,6 +980,7 @@ export class FormularMenu {
     const selectValues = this.selectValues(field);
     const wrapper = document.createElement("label");
     wrapper.className = css(this.prefix, "field");
+    if (field.kind === "checkbox") wrapper.classList.add(css(this.prefix, "toggle-field"));
     wrapper.__formularSelectControl = this.selectControlSignature(field, selectValues);
     wrapper.dataset.fieldId = field.id;
     wrapper.dataset.formularFieldKey = valueKey(ref);
@@ -996,6 +1007,8 @@ export class FormularMenu {
       row.className = css(this.prefix, "field-row");
       const input = document.createElement("input");
       input.type = "checkbox";
+      input.className = css(this.prefix, "toggle");
+      input.setAttribute("role", "switch");
       input.checked = Boolean(current);
       input.disabled = readonly;
       input.addEventListener("change", () => this.commitField(block, field, ref, input.checked));

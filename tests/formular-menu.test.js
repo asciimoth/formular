@@ -77,6 +77,57 @@ test("renders a menu snapshot and sends field messages", () => {
   assert.equal(outbox[1].blockGeneration, 3);
 });
 
+test("renders boolean fields as toggles", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+
+  assert.equal(menu.feed(snapshot()), true);
+
+  const toggle = document.querySelector("[data-formular-item-id='enabled'] input");
+  assert.equal(toggle.closest("label").classList.contains("formular-toggle-field"), true);
+  assert.equal(toggle.type, "checkbox");
+  assert.equal(toggle.className, "formular-toggle");
+  assert.equal(toggle.getAttribute("role"), "switch");
+  assert.equal(toggle.checked, true);
+});
+
+test("lays out toggle labels beside controls and allows narrow containers to wrap", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+  const data = snapshot();
+  const enabled = data.blocks[0].items.find((item) => item.id === "enabled");
+  enabled.status = "ok";
+  enabled.statusText = "Ready";
+
+  assert.equal(menu.feed(data), true);
+
+  const field = document.querySelector("[data-formular-item-id='enabled']");
+  const label = field.querySelector(".formular-field-label");
+  const control = field.querySelector(".formular-field-row");
+  const status = field.querySelector(".formular-status");
+  const fieldStyle = window.getComputedStyle(field);
+  const labelStyle = window.getComputedStyle(label);
+
+  assert.equal(fieldStyle.flexDirection, "row");
+  assert.equal(fieldStyle.flexWrap, "wrap");
+  assert.equal(labelStyle.flexGrow, "1");
+  assert.equal(labelStyle.flexShrink, "1");
+  assert.equal(labelStyle.flexBasis, "12rem");
+  assert.equal(window.getComputedStyle(control).flexGrow, "0");
+  assert.equal(window.getComputedStyle(status).flexBasis, "100%");
+});
+
+test("keeps non-boolean field labels above their controls", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {});
+
+  assert.equal(menu.feed(snapshot()), true);
+
+  const field = document.querySelector("[data-formular-item-id='name']");
+  assert.equal(field.classList.contains("formular-toggle-field"), false);
+  assert.equal(window.getComputedStyle(field).flexDirection, "column");
+});
+
 test("updates conditional visibility and readonly state without backend messages", () => {
   setupDom();
   const outbox = [];
