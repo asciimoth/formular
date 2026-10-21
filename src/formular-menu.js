@@ -942,7 +942,7 @@ export class FormularMenu {
     const list = node.querySelector(`.${css(this.prefix, "logs-list")}`);
     if (label) setTextWithHelp(label, item.label || item.id, this.prefix, item.help);
     if (!list) return;
-    list.replaceChildren(...(item.logs || []).map((line) => {
+    list.replaceChildren(...[...(item.logs || [])].reverse().map((line) => {
       const row = document.createElement("div");
       row.className = css(this.prefix, "log-line");
       const prefix = document.createElement("span");

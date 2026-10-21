@@ -1153,7 +1153,7 @@ test("cached local array elements advance new local ids after force snapshots", 
   assert.equal(outbox.at(-1).value.at(-1).id, "local-4");
 });
 
-test("renders logs and patches appended log lines", () => {
+test("renders newest logs first and patches appended log lines", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});
   menu.feed({
@@ -1200,6 +1200,10 @@ test("renders logs and patches appended log lines", () => {
 
   assert.match(document.body.textContent, /\[error\]<script>alert\(1\)<\/script>/);
   assert.equal(document.querySelectorAll("script").length, 0);
+  assert.deepEqual(
+    [...document.querySelectorAll(".formular-log-line")].map((line) => line.textContent),
+    ["[error]<script>alert(1)</script>", "[info]Ready"]
+  );
 });
 
 test("repeated logs snapshots do not corrupt sibling array fields", () => {
