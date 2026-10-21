@@ -3,11 +3,25 @@ export type FormularTarget = HTMLElement | string;
 export type FormularOutbox = (message: FrontendMessage | UnknownFrontendMessage) => void;
 export type FormularSelectorProvider = (selector: string) => readonly string[] | null | undefined;
 
+export interface FormularMultilineTextInputContext {
+  field: FieldItem;
+  fieldRef: FieldRef;
+  classPrefix: string;
+  /** Registers a listener for the initial value and later programmatic value changes. */
+  onValueChange(listener: (value: string) => void): void;
+}
+
+export type FormularMultilineTextInputRenderer = (
+  textarea: HTMLTextAreaElement,
+  context: FormularMultilineTextInputContext
+) => HTMLElement | null | undefined | void;
+
 export interface FormularMenuOptions {
   classPrefix?: string;
   prefix?: string;
   defaultTheme?: boolean;
   selectors?: FormularSelectorProvider;
+  renderMultilineTextInput?: FormularMultilineTextInputRenderer;
 }
 
 export interface MessageBase {

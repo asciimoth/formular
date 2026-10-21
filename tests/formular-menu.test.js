@@ -499,6 +499,231 @@ test("multiline text fields do not wrap and expand to fit their content", async 
   assert.equal(textarea.style.height, "142px");
 });
 
+test("allows custom multiline text input rendering", async () => {
+  setupDom();
+  const outbox = [];
+  const calls = [];
+  const menu = new FormularMenu("root", "settings", (message) => outbox.push(message), {
+    renderMultilineTextInput(textarea, context) {
+      calls.push({ textarea, context });
+      const editor = document.createElement("div");
+      editor.className = "custom-editor";
+      editor.append(textarea);
+      return editor;
+    }
+  });
+  const data = snapshot();
+  data.blocks[0].items.push({
+    type: "field",
+    id: "notes",
+    kind: "text",
+    label: "Notes",
+    value: "line one\nline two",
+    multiline: true,
+    subtype: "javascript"
+  });
+
+  menu.feed(data);
+  await Promise.resolve();
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].context.field.id, "notes");
+  assert.deepEqual(calls[0].context.fieldRef, { blockId: "main", fieldId: "notes" });
+  assert.equal(calls[0].context.classPrefix, "formular");
+  const editor = document.querySelector(".custom-editor");
+  const textarea = editor.querySelector("textarea");
+  assert.equal(textarea, calls[0].textarea);
+  assert.equal(textarea.value, "line one\nline two");
+
+  outbox.length = 0;
+  textarea.value = "const answer = 42;";
+  textarea.dispatchEvent(new window.Event("input", { bubbles: true }));
+  assert.equal(outbox.at(-1).type, "field.update");
+  assert.equal(outbox.at(-1).value, "const answer = 42;");
+});
+
+test("does not call the multiline renderer for single-line fields", () => {
+  setupDom();
+  let calls = 0;
+  const menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput() {
+      calls += 1;
+    }
+  });
+
+  menu.feed(snapshot());
+
+  assert.equal(calls, 0);
+  assert.equal(document.querySelector("input[type='text']").value, "Ada");
+});
+
+test("uses the native textarea when the multiline renderer returns no element", () => {
+  setupDom();
+  const values = [];
+  const menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput(textarea, { onValueChange }) {
+      textarea.dataset.enhanced = "true";
+      onValueChange((value) => values.push(value));
+      return undefined;
+    }
+  });
+  const data = snapshot();
+  data.blocks[0].items.push({
+    type: "field",
+    id: "notes",
+    kind: "text",
+    label: "Notes",
+    value: "native value",
+    multiline: true
+  });
+
+  menu.feed(data);
+
+  const textarea = document.querySelector("textarea");
+  assert.equal(textarea.dataset.enhanced, "true");
+  assert.equal(textarea.parentElement.className, "formular-field");
+  assert.deepEqual(values, ["native value"]);
+});
+
+test("keeps a custom multiline wrapper during compatible backend patches", () => {
+  setupDom();
+  const observedValues = [];
+  let renderCalls = 0;
+  const menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput(textarea, { onValueChange }) {
+      renderCalls += 1;
+      onValueChange((value) => observedValues.push(value));
+      const wrapper = document.createElement("span");
+      wrapper.className = "custom-editor";
+      wrapper.append(textarea);
+      return wrapper;
+    }
+  });
+  const data = snapshot();
+  data.blocks[0].items.push({
+    type: "field",
+    id: "notes",
+    kind: "text",
+    label: "Notes",
+    value: "first value",
+    multiline: true,
+    status: "warn"
+  });
+  menu.feed(data);
+  const wrapper = document.querySelector(".custom-editor");
+  const textarea = wrapper.querySelector("textarea");
+
+  const nextBlock = structuredClone(data.blocks[0]);
+  nextBlock.generation = 4;
+  nextBlock.items.find((item) => item.id === "notes").value = "backend value";
+  menu.feed({
+    type: "block.snapshot",
+    menuId: "settings",
+    menuGeneration: 7,
+    block: nextBlock
+  });
+
+  assert.equal(renderCalls, 1);
+  assert.equal(document.querySelector(".custom-editor"), wrapper);
+  assert.equal(textarea.value, "backend value");
+  assert.deepEqual(observedValues, ["first value", "backend value"]);
+
+  menu.feed({
+    type: "field.status",
+    menuId: "settings",
+    field: { blockId: "main", fieldId: "notes" },
+    status: "error",
+    statusText: "Invalid text",
+    readonly: true
+  });
+  assert.equal(textarea.disabled, true);
+  assert.equal(textarea.dataset.status, "error");
+  assert.equal(wrapper.parentElement.querySelector(".formular-status").textContent, "Invalid text");
+});
+
+test("passes array element paths to the multiline renderer", () => {
+  setupDom();
+  const refs = [];
+  const menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput(textarea, { fieldRef }) {
+      refs.push(fieldRef);
+      return textarea;
+    }
+  });
+  menu.feed({
+    type: "menu.snapshot",
+    menuId: "settings",
+    menuGeneration: 1,
+    blocks: [{
+      id: "main",
+      order: 1,
+      generation: 1,
+      form: false,
+      items: [{
+        type: "field",
+        id: "sections",
+        kind: "array",
+        label: "Sections",
+        elements: [{
+          id: "section-1",
+          template: "text",
+          items: [{
+            type: "field",
+            id: "body",
+            kind: "text",
+            label: "Body",
+            value: "Nested text",
+            multiline: true
+          }]
+        }],
+        templates: []
+      }]
+    }]
+  });
+
+  assert.deepEqual(refs, [{
+    blockId: "main",
+    fieldId: "body",
+    elementPath: [{ arrayFieldId: "sections", elementId: "section-1" }]
+  }]);
+});
+
+test("rejects invalid multiline renderer results", () => {
+  setupDom();
+  let menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput() {
+      return {};
+    }
+  });
+  let data = snapshot();
+  data.blocks[0].items.push({ type: "field", id: "notes", kind: "text", label: "Notes", multiline: true });
+  assert.throws(() => menu.feed(data), /must return an HTMLElement/);
+
+  setupDom();
+  menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput() {
+      return document.createElement("span");
+    }
+  });
+  data = snapshot();
+  data.blocks[0].items.push({ type: "field", id: "notes", kind: "text", label: "Notes", multiline: true });
+  assert.throws(() => menu.feed(data), /must return the textarea or an element that contains it/);
+});
+
+test("validates multiline value-change listeners", () => {
+  setupDom();
+  const menu = new FormularMenu("root", "settings", () => {}, {
+    renderMultilineTextInput(textarea, { onValueChange }) {
+      onValueChange("not a function");
+      return textarea;
+    }
+  });
+  const data = snapshot();
+  data.blocks[0].items.push({ type: "field", id: "notes", kind: "text", label: "Notes", multiline: true });
+
+  assert.throws(() => menu.feed(data), /onValueChange requires a function/);
+});
+
 test("renders visible help markers for item help", () => {
   setupDom();
   const menu = new FormularMenu("root", "settings", () => {});

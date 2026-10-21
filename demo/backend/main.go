@@ -28,7 +28,7 @@ var profileValues = map[string]any{
 	"email":    "admin@example.com",
 	"timezone": "UTC",
 	"password": "",
-	"bio":      "Line one\nLine two",
+	"bio":      "{\n  \"theme\": \"dark\",\n  \"autosave\": true,\n  \"fontSize\": 14\n}",
 	"age":      37,
 	"score":    98.5,
 	"avatar":   nil,
@@ -636,7 +636,10 @@ func leftBlocks() []formular.Block {
 					f.Autocomplete = &formular.Autocomplete{Enabled: true, Tag: "timezone"}
 				}), "Text field that requests timezone completions while focused or edited."),
 				withHelp(field("password", formular.FieldText, "Secret", profileValue("password", ""), func(f *formular.Field) { f.Secret = true }), "Secret text is rendered with a password input."),
-				withHelp(field("bio", formular.FieldText, "Bio", profileValue("bio", "Line one\nLine two"), func(f *formular.Field) { f.Multiline = true }), "Multiline text is preserved when the form is applied."),
+				withHelp(field("bio", formular.FieldText, "Editor configuration (JSON)", profileValue("bio", "{}"), func(f *formular.Field) {
+					f.Multiline = true
+					f.Subtype = "json"
+				}), "The JavaScript frontend hook adds syntax highlighting while keeping the native textarea."),
 				withHelp(field("age", formular.FieldInt, "Age", profileValue("age", 37), func(f *formular.Field) {
 					min, max := 0.0, 130.0
 					f.Min, f.Max = &min, &max

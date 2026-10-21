@@ -16,6 +16,47 @@ function selectorValues(selector) {
   return selector === "users" ? frontendKnownUsers : undefined;
 }
 
+function highlightJSON(code, source) {
+  const pattern = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\b(?:true|false|null)\b/g;
+  const nodes = [];
+  let offset = 0;
+  for (const match of source.matchAll(pattern)) {
+    if (match.index > offset) nodes.push(document.createTextNode(source.slice(offset, match.index)));
+    const token = document.createElement("span");
+    const rest = source.slice(match.index + match[0].length);
+    if (match[0].startsWith("\"")) token.className = /^\s*:/.test(rest) ? "demo-json-key" : "demo-json-string";
+    else if (/^(?:true|false|null)$/.test(match[0])) token.className = "demo-json-literal";
+    else token.className = "demo-json-number";
+    token.textContent = match[0];
+    nodes.push(token);
+    offset = match.index + match[0].length;
+  }
+  nodes.push(document.createTextNode(source.slice(offset) || (source.endsWith("\n") ? " " : "")));
+  code.replaceChildren(...nodes);
+}
+
+function renderDemoMultilineTextInput(textarea, { field, onValueChange }) {
+  if (field.subtype !== "json") return undefined;
+
+  const editor = document.createElement("span");
+  editor.className = "demo-highlight-editor";
+  const highlight = document.createElement("pre");
+  highlight.className = "demo-highlight-layer";
+  highlight.setAttribute("aria-hidden", "true");
+  const code = document.createElement("code");
+  highlight.append(code);
+  const update = () => highlightJSON(code, textarea.value);
+  const syncScroll = () => {
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  };
+  textarea.addEventListener("input", update);
+  textarea.addEventListener("scroll", syncScroll);
+  onValueChange(update);
+  editor.append(highlight, textarea);
+  return editor;
+}
+
 function log(direction, message) {
   const item = document.createElement("li");
   item.textContent = `${direction} ${message.type} (${message.menuId})`;
@@ -31,7 +72,10 @@ function sendToBackend(message) {
 function createFrontends({ requestSnapshot = true } = {}) {
   for (const frontend of frontends) frontend.destroy();
   frontends.length = 0;
-  const options = { selectors: selectorValues };
+  const options = {
+    selectors: selectorValues,
+    renderMultilineTextInput: renderDemoMultilineTextInput
+  };
   frontends.push(new FormularMenu("left-menu", "left", sendToBackend, options));
   frontends.push(new FormularMenu("right-menu", "right", sendToBackend, options));
   log("demo", { type: "demo.frontends.started", menuId: "both" });

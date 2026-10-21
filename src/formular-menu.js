@@ -257,6 +257,10 @@ function autoExpandTextarea(control) {
   control.style.height = `${control.scrollHeight + borderHeight}px`;
 }
 
+function notifyMultilineTextInput(control) {
+  for (const listener of control?.__formularMultilineValueListeners || []) listener(control.value);
+}
+
 export class FormularMenu {
   constructor(target, menuId, outbox, options = {}) {
     const node = typeof target === "string" ? document.getElementById(target) : target;
@@ -268,6 +272,9 @@ export class FormularMenu {
     this.prefix = options.classPrefix || options.prefix || DEFAULT_PREFIX;
     this.defaultTheme = options.defaultTheme !== false;
     this.selectorProvider = typeof options.selectors === "function" ? options.selectors : null;
+    this.multilineTextInputRenderer = typeof options.renderMultilineTextInput === "function"
+      ? options.renderMultilineTextInput
+      : null;
     this.blocks = new Map();
     this.menuGeneration = 0;
     this.values = new Map();
@@ -697,6 +704,7 @@ export class FormularMenu {
     } else {
       control.value = value == null ? "" : String(value);
       autoExpandTextarea(control);
+      notifyMultilineTextInput(control);
     }
     return true;
   }
@@ -1099,6 +1107,31 @@ export class FormularMenu {
       if (currentField.autocomplete?.enabled) this.requestAutocomplete(block, currentField, ref, input.value);
     });
     if (field.multiline) queueMicrotask(() => autoExpandTextarea(input));
+    let renderedInput = input;
+    if (field.multiline && this.multilineTextInputRenderer) {
+      const valueListeners = [];
+      input.__formularMultilineValueListeners = valueListeners;
+      const rendered = this.multilineTextInputRenderer(input, {
+        field: clone(field),
+        fieldRef: clone(ref),
+        classPrefix: this.prefix,
+        onValueChange: (listener) => {
+          if (typeof listener !== "function") throw new TypeError("onValueChange requires a function");
+          valueListeners.push(listener);
+          listener(input.value);
+        }
+      });
+      if (rendered != null) {
+        const HTMLElementClass = rendered?.ownerDocument?.defaultView?.HTMLElement;
+        if (typeof HTMLElementClass !== "function" || !(rendered instanceof HTMLElementClass)) {
+          throw new TypeError("renderMultilineTextInput must return an HTMLElement, null, or undefined");
+        }
+        if (rendered !== input && !rendered.contains(input)) {
+          throw new TypeError("renderMultilineTextInput must return the textarea or an element that contains it");
+        }
+        renderedInput = rendered;
+      }
+    }
     if (field.autocomplete?.enabled) {
       const listId = `${this.prefix}-hints-${Math.random().toString(36).slice(2)}`;
       const list = document.createElement("datalist");
@@ -1110,10 +1143,10 @@ export class FormularMenu {
         this.requestAutocomplete(block, field, ref, input.value);
       });
       const group = document.createElement("span");
-      group.append(input, list);
+      group.append(renderedInput, list);
       return group;
     }
-    return input;
+    return renderedInput;
   }
 
   selectValues(field) {

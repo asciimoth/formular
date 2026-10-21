@@ -26,6 +26,8 @@ new FormularMenu(target, menuId, outbox, options?)
 - `options.defaultTheme`: set to `false` to skip the built-in Catppuccin theme.
 - `options.selectors`: callback that returns current frontend-owned string
   values for a selector name.
+- `options.renderMultilineTextInput`: optional hook that customizes multiline
+  text inputs.
 
 For example, the backend can mark a text field with `"selector": "users"`
 without sending a user list. Supply that list when you create the frontend:
@@ -43,6 +45,83 @@ frontend values. If the callback does not know the requested name, the frontend
 renders a normal text input. If the current field value is not in the frontend
 list, the control also shows that value so its displayed and submitted values
 stay consistent.
+
+### Custom multiline text input rendering
+
+Use `renderMultilineTextInput` to add presentation such as syntax highlighting,
+line numbers, or an editor toolbar. The hook runs only for fields that have
+`multiline: true`. The frontend configures the native textarea and its input
+listeners before it calls the hook.
+
+The hook has this TypeScript signature:
+
+```ts
+type FormularMultilineTextInputRenderer = (
+  textarea: HTMLTextAreaElement,
+  context: {
+    field: FieldItem;
+    fieldRef: FieldRef;
+    classPrefix: string;
+    onValueChange(listener: (value: string) => void): void;
+  }
+) => HTMLElement | null | undefined | void;
+```
+
+The context values have these purposes:
+
+- `field` is a copy of the complete field definition.
+- `fieldRef` identifies the field. It includes `elementPath` for a field in an
+  array element.
+- `classPrefix` is the configured CSS prefix.
+- `onValueChange` registers a presentation update function. The frontend calls
+  it immediately with the initial value and again after it changes the value
+  from a backend snapshot. Listen for the native `input` event to process user
+  edits.
+
+The hook can change and return the textarea. It can also return one wrapper
+element that contains the supplied textarea. Return `null` or `undefined` to
+use the textarea without a wrapper. The frontend throws a `TypeError` if the
+result is not an HTML element or does not contain the textarea.
+
+```js
+const menu = new FormularMenu(root, "settings", send, {
+  renderMultilineTextInput: (textarea, { field, onValueChange }) => {
+    if (field.subtype !== "json") return undefined;
+
+    const editor = document.createElement("span");
+    editor.className = "highlight-editor";
+    const highlight = document.createElement("pre");
+    highlight.setAttribute("aria-hidden", "true");
+
+    // Use a safe highlighter that creates text nodes. Do not insert backend
+    // text with innerHTML.
+    const update = (value = textarea.value) => {
+      highlight.textContent = value;
+    };
+    textarea.addEventListener("input", () => update());
+    onValueChange(update);
+
+    editor.append(highlight, textarea);
+    return editor;
+  }
+});
+```
+
+Keep the supplied textarea as the interactive and accessible control. The
+frontend continues to manage its value, disabled state, validation status,
+automatic height, autocomplete behavior, and outgoing messages. A decoration
+layer must use `aria-hidden="true"` if assistive technology must ignore it.
+
+The hook runs when the frontend creates the field DOM. It runs again if the
+field is recreated, such as after a form reset or a forced snapshot. An
+in-place snapshot update keeps the existing wrapper. Do not keep global
+references to wrappers after their fields are removed.
+
+If this option is not set, multiline fields use the same native textarea
+rendering as before. Single-line and non-text fields do not call the hook. See
+the complete dependency-free JSON highlighting example in
+[`demo/app.js`](../demo/app.js) and its styles in
+[`demo/style.css`](../demo/style.css).
 
 The constructor clears the target node and owns its contents until `destroy()`
 is called or the target node is removed from the document.

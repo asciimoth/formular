@@ -92,6 +92,68 @@ body {
   padding-left: 24px;
 }
 
+.demo-highlight-editor {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+
+.demo-highlight-editor > .demo-highlight-layer,
+.demo-highlight-editor > .formular-textarea,
+.demo-highlight-layer > code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.45;
+  tab-size: 2;
+  white-space: pre;
+  word-spacing: 0;
+}
+
+.demo-highlight-layer {
+  background: #11111b;
+  border: 1px solid #45475a;
+  border-radius: 6px;
+  color: #cdd6f4;
+  margin: 0;
+  min-height: 88px;
+  overflow: hidden;
+  padding: 6px 8px;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.demo-highlight-editor .formular-textarea {
+  background: transparent;
+  caret-color: #cdd6f4;
+  color: transparent;
+  display: block;
+  position: relative;
+}
+
+.demo-highlight-editor .formular-textarea::selection {
+  background: rgba(137, 180, 250, .35);
+  color: transparent;
+}
+
+.demo-json-key {
+  color: #89b4fa;
+}
+
+.demo-json-string {
+  color: #a6e3a1;
+}
+
+.demo-json-number {
+  color: #fab387;
+}
+
+.demo-json-literal {
+  color: #cba6f7;
+}
+
 @media (max-width: 900px) {
   .demo-grid {
     grid-template-columns: 1fr;

@@ -17,6 +17,53 @@ test("demo boots Go WASM backend and renders both menus", async ({ page }) => {
   await expect(page.getByText("Activity log")).toBeVisible();
 });
 
+test("demo uses the multiline rendering hook for JSON highlighting", async ({ page }) => {
+  await page.goto("/demo/");
+  await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();
+
+  const editor = page.locator("#left-menu .demo-highlight-editor");
+  const textarea = page.getByLabel("Editor configuration (JSON)");
+  await expect(editor).toHaveCount(1);
+  await expect(editor.locator("textarea")).toBeAttached();
+  await expect(editor.locator(".demo-json-key", { hasText: "\"theme\"" })).toHaveCount(1);
+  await expect(editor.locator(".demo-json-literal")).toContainText("true");
+
+  const geometry = await editor.evaluate((node) => {
+    const textarea = node.querySelector("textarea");
+    const highlight = node.querySelector("pre");
+    const code = highlight.querySelector("code");
+    const textareaStyle = getComputedStyle(textarea);
+    const highlightStyle = getComputedStyle(highlight);
+    const codeStyle = getComputedStyle(code);
+    const textareaRect = textarea.getBoundingClientRect();
+    const highlightRect = highlight.getBoundingClientRect();
+    return {
+      textareaFont: textareaStyle.fontFamily,
+      highlightFont: highlightStyle.fontFamily,
+      codeFont: codeStyle.fontFamily,
+      textareaLineHeight: textareaStyle.lineHeight,
+      highlightLineHeight: highlightStyle.lineHeight,
+      widthDifference: Math.abs(textareaRect.width - highlightRect.width),
+      heightDifference: Math.abs(textareaRect.height - highlightRect.height),
+      xDifference: Math.abs(textareaRect.x - highlightRect.x),
+      yDifference: Math.abs(textareaRect.y - highlightRect.y)
+    };
+  });
+  expect(geometry.textareaFont).toBe(geometry.highlightFont);
+  expect(geometry.textareaFont).toBe(geometry.codeFont);
+  expect(geometry.textareaLineHeight).toBe(geometry.highlightLineHeight);
+  expect(geometry.widthDifference).toBeLessThan(0.01);
+  expect(geometry.heightDifference).toBeLessThan(0.01);
+  expect(geometry.xDifference).toBeLessThan(0.01);
+  expect(geometry.yDifference).toBeLessThan(0.01);
+
+  await textarea.fill("{\n  \"retries\": 3,\n  \"enabled\": false\n}");
+  await expect(editor.locator(".demo-json-key")).toHaveCount(2);
+  await expect(editor.locator(".demo-json-number")).toContainText("3");
+  await expect(editor.locator(".demo-json-literal")).toContainText("false");
+  await expect(textarea).toHaveValue("{\n  \"retries\": 3,\n  \"enabled\": false\n}");
+});
+
 test("demo evaluates item state conditions in the frontend", async ({ page }) => {
   await page.goto("/demo/");
   await expect(page.getByText(/Go backend #\d+ running/)).toBeVisible();

@@ -19,8 +19,22 @@ import { FormularMenu } from "@asciimoth/formular-menu";
 
 const menu = new FormularMenu("root", "settings", (message) => {
   console.log("frontend message", message);
+}, {
+  renderMultilineTextInput(textarea, { field }) {
+    if (field.subtype !== "json") return undefined;
+    const editor = document.createElement("span");
+    editor.className = "json-editor";
+    editor.append(textarea);
+    return editor;
+  }
 });
 ```
+
+The optional `renderMultilineTextInput` hook can wrap multiline textareas for
+syntax highlighting and other custom presentation. The native textarea stays
+in control of values, validation, readonly state, and messages. See the
+[JavaScript frontend documentation](docs/frontend-js.md#custom-multiline-text-input-rendering)
+for the full contract.
 
 Run the local WASM demo:
 
@@ -30,7 +44,8 @@ pnpm run demo
 ```
 
 The demo renders two independent frontends and a Go WASM backend connected by
-one merged JSON message channel.
+one merged JSON message channel. Its JSON configuration field uses the custom
+multiline rendering hook for live syntax highlighting.
 
 ## License
 Files in this repository are distributed under the CC0 license.  
