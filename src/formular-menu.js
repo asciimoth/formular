@@ -1081,6 +1081,7 @@ export class FormularMenu {
     }
     const input = field.multiline ? document.createElement("textarea") : document.createElement("input");
     input.className = field.multiline ? css(this.prefix, "textarea") : css(this.prefix, "control");
+    input.spellcheck = false;
     if (field.multiline) {
       input.wrap = "off";
       input.style.overflowY = "hidden";

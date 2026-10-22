@@ -65,6 +65,7 @@ test("renders a menu snapshot and sends field messages", () => {
   outbox.length = 0;
 
   const input = document.querySelector("input[type='text']");
+  assert.equal(input.spellcheck, false);
   input.value = "Grace";
   input.dispatchEvent(new window.Event("input", { bubbles: true }));
 
@@ -485,6 +486,7 @@ test("multiline text fields do not wrap and expand to fit their content", async 
   await Promise.resolve();
 
   const textarea = document.querySelector("textarea");
+  assert.equal(textarea.spellcheck, false);
   assert.equal(textarea.wrap, "off");
   assert.equal(textarea.style.overflowY, "hidden");
 
